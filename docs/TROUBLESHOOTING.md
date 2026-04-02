@@ -60,10 +60,28 @@ Get-Command openclaw
 ### Acciones
 
 1. Revisar token en `UPSTREAM_AUTH`.
-2. Validar que OpenClaw gateway espera el mismo esquema de auth.
+2. Validar que OpenClaw gateway espera el mismo esquema de auth (`UPSTREAM_AUTH_HEADER`).
 3. Reiniciar launcher.
 
-## 5) Puerto ocupado
+## 5) Upstream remoto bloqueado por seguridad
+
+### Sintoma
+
+El proxy falla al iniciar con mensaje de `UPSTREAM_URL blocked by security policy`.
+
+### Acciones
+
+1. Confirmar que usas gateway local (`http://127.0.0.1:18789` recomendado).
+2. Si necesitas remoto de forma explicita:
+
+```powershell
+$env:CLAUDEX_UPSTREAM_LOCAL_ONLY='0'
+claudex
+```
+
+3. No usar tokens productivos en hosts no confiables.
+
+## 6) Puerto ocupado
 
 ### Sintoma
 
@@ -83,7 +101,7 @@ netstat -ano | findstr 8787
 
 Nota: el proxy ya intenta puertos alternativos automaticamente.
 
-## 6) La TUI abre pero no responde
+## 7) La TUI abre pero no responde
 
 ### Sintoma
 
@@ -96,7 +114,7 @@ Interfaz visible, pero requests sin respuesta.
 3. Probar upstream manual con curl/httpie si aplica.
 4. Reintentar con arranque manual por etapas (ver `docs/OPERATIONS.md`).
 
-## 7) Permisos o trust prompts inesperados
+## 8) Permisos o trust prompts inesperados
 
 ### Sintoma
 

@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.claudex.json",
     "typecheck:full": "tsc --noEmit -p tsconfig.json",
     "smoke:scripts": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"[ScriptBlock]::Create((Get-Content -Raw './scripts/run-claude-full.ps1')) | Out-Null; [ScriptBlock]::Create((Get-Content -Raw './scripts/install-claudex.ps1')) | Out-Null; Write-Output 'OK'\"",
-    "ollama": "bun run src/ollama-cli.ts",
+    "ollama": "bun run src/tools/ollama-cli.ts",
     "openclaw-proxy": "bun run src/tools/openclaw-proxy.ts",
     "install:claudex": "powershell -NoLogo -ExecutionPolicy Bypass -File .\\scripts\\install-claudex.ps1"
   },

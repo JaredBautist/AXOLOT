@@ -25,6 +25,8 @@ $env:PROXY_PORT='8787'
 $env:UPSTREAM_URL='http://127.0.0.1:18789'
 $env:UPSTREAM_MODEL='openclaw'
 $env:UPSTREAM_AUTH='<token>'
+$env:UPSTREAM_AUTH_HEADER='authorization'   # o 'x-api-key'
+$env:CLAUDEX_UPSTREAM_LOCAL_ONLY='1'        # default recomendado
 bun run src/tools/openclaw-proxy.ts
 ```
 
@@ -76,7 +78,25 @@ del arbol completo heredado del upstream.
 
 - `UPSTREAM_MODEL`: permitir override por session.
 - `UPSTREAM_AUTH`: inyectar por secreto local, no hardcode productivo.
+- `UPSTREAM_AUTH_HEADER`: elegir esquema segun gateway (`authorization` o `x-api-key`).
 - `PROXY_PORT`: fijar solo si se integra con tooling externo.
+- `CLAUDEX_UPSTREAM_LOCAL_ONLY=1`: evita exfiltracion accidental de tokens.
+- `CLAUDEX_MAX_BUDGET_USD`: limita gasto por sesion sin pasar flags en cada ejecucion.
+
+## Control de gasto
+
+- Ad-hoc por sesion:
+
+```powershell
+claudex --max-budget-usd 2
+```
+
+- Politica local por entorno:
+
+```powershell
+$env:CLAUDEX_MAX_BUDGET_USD='2'
+claudex
+```
 
 ## Limpieza de artefactos locales
 

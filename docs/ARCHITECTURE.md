@@ -19,8 +19,10 @@ Responsabilidades:
 - Resolver ejecutables (`bun`, `openclaw`) desde PATH.
 - Detectar/seleccionar puerto de proxy.
 - Levantar OpenClaw gateway si no existe listener en `18789`.
+- Cerrar solo el proxy previo de Claudex usando PID registrado en `.claude_tmp/run/proxy.pid`.
 - Levantar proxy Bun (`src/tools/openclaw-proxy.ts`).
 - Exportar variables de entorno de compatibilidad Anthropic.
+- Reenviar argumentos CLI al entrypoint (`claudex -- ...`) y soportar budget por sesion.
 - Lanzar la TUI en otra ventana con TTY real.
 
 ### 3) Proxy (`src/tools/openclaw-proxy.ts`)
@@ -32,6 +34,8 @@ Responsabilidades:
 - Reenviar al upstream OpenClaw.
 - Reconvertir respuesta a stream SSE estilo Anthropic.
 - Mapear tool calls entre formatos.
+- Redactar secretos en logs.
+- Enforce de seguridad local-only por defecto para evitar exfiltracion accidental de token.
 
 ### 4) TUI (`src/dev-entry.ts` -> `src/main.tsx`)
 
@@ -61,13 +65,12 @@ Responsabilidades:
 
 ## Riesgos actuales
 
-- `scripts/run-claude-full.ps1` fuerza cierre de procesos `bun`; puede afectar otras sesiones.
-- Token upstream default en script; no recomendado para entornos compartidos.
 - Proxy tiene varias rutas fallback; conviene testear solo rutas soportadas por la version de OpenClaw objetivo.
+- Si desactivas `CLAUDEX_UPSTREAM_LOCAL_ONLY`, revisa bien el host upstream antes de usar tokens productivos.
 
 ## Mejoras tecnicas recomendadas
 
-1. Reemplazar `Get-Process bun | Stop-Process` por kill selectivo por puerto/PID hijo.
-2. Externalizar token/modelo a `.env` local no versionado.
-3. Agregar tests de regresion del adaptador de mensajes y tool calls.
-4. Instrumentar proxy con logs json y niveles (`info/warn/error`).
+1. Externalizar token/modelo a `.env` local no versionado.
+2. Agregar tests de regresion del adaptador de mensajes y tool calls.
+3. Instrumentar proxy con logs json y niveles (`info/warn/error`).
+4. Agregar tests de seguridad para validacion local-only y sanitizacion de logs.

@@ -108,6 +108,12 @@ Desde cualquier carpeta:
 claudex
 ```
 
+Con limite de gasto por sesion (recomendado):
+
+```powershell
+claudex --max-budget-usd 2
+```
+
 Que hace automaticamente:
 
 - Levanta OpenClaw gateway en `127.0.0.1:18789` si no estaba activo.
@@ -123,6 +129,9 @@ Variables importantes del launcher:
 - `UPSTREAM_URL`: endpoint del gateway OpenClaw.
 - `UPSTREAM_MODEL`: modelo enviado al upstream.
 - `UPSTREAM_AUTH`: token de autenticacion hacia upstream.
+- `UPSTREAM_AUTH_HEADER`: header para token (`authorization` por defecto, o `x-api-key`).
+- `CLAUDEX_UPSTREAM_LOCAL_ONLY`: `1` por defecto para bloquear upstream remoto y evitar fuga accidental de token.
+- `CLAUDEX_MAX_BUDGET_USD`: presupuesto maximo por sesion (inyecta `--max-budget-usd` si no se pasa manualmente).
 - `CLAUDE_CONFIG_DIR`: carpeta aislada de configuracion local (`.claude_tmp`).
 
 La resolucion de `bun` y `openclaw` se hace por PATH en runtime, con error explicito si falta alguna herramienta.
@@ -133,6 +142,7 @@ La resolucion de `bun` y `openclaw` se hace por PATH en runtime, con error expli
 - `scripts/run-claude-full.ps1`: orquestador completo (gateway + proxy + TUI).
 - `scripts/install-claudex.ps1`: instalacion del comando global.
 - `src/tools/openclaw-proxy.ts`: traductor Anthropic <-> OpenAI Chat Completions.
+- `src/tools/ollama-cli.ts`: utilidad CLI para probar Ollama directo.
 
 NPM/Bun scripts:
 
@@ -157,7 +167,9 @@ NPM/Bun scripts:
 |   `-- install-claudex.ps1
 |-- src/
 |   |-- dev-entry.ts
-|   `-- tools/openclaw-proxy.ts
+|   `-- tools/
+|       |-- openclaw-proxy.ts
+|       `-- ollama-cli.ts
 |-- docs/
 |   |-- ARCHITECTURE.md
 |   |-- OPERATIONS.md
@@ -225,11 +237,16 @@ Casos comunes:
 - Mantener `.gitignore` actualizado para artefactos locales.
 - Revisar permisos de herramientas externas antes de usar bypass total.
 - Revisar y respetar `LICENSE` antes de redistribuir el codigo.
+- Claudex ahora bloquea upstream remoto por defecto (`CLAUDEX_UPSTREAM_LOCAL_ONLY=1`).
+- El token `UPSTREAM_AUTH` se usa solo en el proxy y no se reinyecta a la TUI.
+- El proxy redacta secretos en logs para reducir riesgo de fuga.
+- Usa presupuesto por sesion: `claudex --max-budget-usd 2` o `CLAUDEX_MAX_BUDGET_USD=2`.
 
 ## Plan para una herramienta lista
 
-1. **Base estable (actual)**: launcher global, hardening de secretos, CI minima y estructura ordenada del repo.
-2. **Confiabilidad**: unificar proxies, eliminar kill global de procesos, mejorar manejo de errores/red.
-3. **Producto multi-modelo**: selector de backend/modelo por config/flags (`OpenAI`, `Gemini`, `Grok`, `Kimi`, `Ollama`).
-4. **Calidad operativa**: tests de contrato del proxy, smoke tests E2E y logs estructurados.
-5. **Release serio**: versionado, changelog, docs de despliegue y empaquetado multiplataforma.
+1. **Base estable (listo)**: launcher global, hardening de secretos, CI minima y estructura ordenada inicial.
+2. **Confiabilidad (en progreso)**: proxy canonico unificado, sin kill global de `bun`, control de procesos por PID del proxy.
+3. **Seguridad/costos (en progreso)**: upstream local-only por defecto, redaccion de secretos en logs y limite de presupuesto por sesion.
+4. **Producto multi-modelo (siguiente)**: selector de backend/modelo por config/flags (`OpenAI`, `Gemini`, `Grok`, `Kimi`, `Ollama`).
+5. **Calidad operativa (siguiente)**: tests de contrato del proxy, smoke tests E2E y logs estructurados.
+6. **Release serio (siguiente)**: versionado, changelog, docs de despliegue y empaquetado multiplataforma.
