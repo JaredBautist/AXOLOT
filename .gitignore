@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Runtime/session artifacts
+.claude_tmp/
+.openclaw/
+proxy-output.log
+*.log
+*.tmp
+tempCodeRunnerFile.ps1
