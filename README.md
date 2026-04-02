@@ -9,6 +9,7 @@ Claudex es un fork operativo del CLI de Claude Code para correr en modo local co
 - [Requisitos](#requisitos)
 - [Compatibilidad de modelos y cuentas](#compatibilidad-de-modelos-y-cuentas)
 - [Instalacion](#instalacion)
+- [Guia step by step](#guia-step-by-step)
 - [Uso diario](#uso-diario)
 - [Configuracion](#configuracion)
 - [Perfiles con .claudexrc](#perfiles-con-claudexrc)
@@ -50,6 +51,7 @@ Documentacion tecnica extendida:
 - `docs/ARCHITECTURE.md`
 - `docs/OPERATIONS.md`
 - `docs/TROUBLESHOOTING.md`
+- `docs/STEP_BY_STEP.md`
 - `docs/THIRD_PARTY_SKILLS.md`
 
 ## Requisitos
@@ -115,6 +117,12 @@ Copy-Item .\.claudexrc.example.json .\.claudexrc.json
 $env:CLAUDEX_PROFILE='openai'
 $env:CLAUDEX_SKILLS_PACK='token-lean'
 ```
+
+## Guia step by step
+
+Si quieres una guia completa desde cero:
+
+- `docs/STEP_BY_STEP.md`
 
 ## Uso diario
 
@@ -303,6 +311,11 @@ Casos comunes:
 - Puerto ocupado -> launcher selecciona puerto alternativo automaticamente.
 - Proxy responde 401/403 -> revisar `UPSTREAM_AUTH`.
 - TUI no abre -> ejecutar `scripts/run-claude-full.ps1` manualmente para ver errores directos.
+
+Notas rapidas importantes:
+
+- El mensaje `Aviso: UPSTREAM_AUTH no esta definido` no es un fallo. Solo aplica si tu gateway exige token.
+- El error `No se puede sobrescribir la variable Host` ya fue corregido en `main` (commit `b7b5bd6`). Si lo ves, actualiza tu copia local.
 
 ## Seguridad y buenas practicas
 

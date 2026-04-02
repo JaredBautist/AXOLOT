@@ -171,6 +171,47 @@ La TUI pide aprobaciones frecuentes.
 2. Verificar configuracion local en `.claude_tmp`.
 3. Alinear politicas de permisos segun entorno de trabajo.
 
+## 11) Aviso `UPSTREAM_AUTH no esta definido`
+
+### Sintoma
+
+Al iniciar aparece:
+
+`[scripts] Aviso: UPSTREAM_AUTH no esta definido...`
+
+### Acciones
+
+1. Si tu gateway NO requiere auth, ignora el aviso (es informativo).
+2. Si tu gateway SI requiere auth, exporta token y relanza:
+
+```powershell
+$env:UPSTREAM_AUTH='tu_token'
+claudex
+```
+
+## 12) Error `No se puede sobrescribir la variable Host`
+
+### Sintoma
+
+PowerShell muestra:
+
+`No se puede sobrescribir la variable Host porque es de solo lectura o constante.`
+
+### Causa
+
+Version vieja del launcher local.
+
+### Acciones
+
+1. Actualizar repositorio a la ultima version de `main`.
+2. Reinstalar launcher:
+
+```powershell
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
+```
+
+3. Abrir una terminal nueva y probar `claudex`.
+
 ## Checklist minimo de diagnostico
 
 ```powershell
