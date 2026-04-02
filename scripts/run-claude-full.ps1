@@ -190,8 +190,8 @@ function Get-LocalGatewayPort {
   if ($uri.Scheme -notin @('http', 'https')) { return $null }
   if ($uri.AbsolutePath -and $uri.AbsolutePath -ne '/') { return $null }
 
-  $host = $uri.Host.ToLowerInvariant()
-  if ($host -notin @('127.0.0.1', 'localhost', '::1')) { return $null }
+  $upstreamHost = $uri.Host.ToLowerInvariant()
+  if ($upstreamHost -notin @('127.0.0.1', 'localhost', '::1')) { return $null }
 
   if ($uri.IsDefaultPort) { return 18789 }
   return $uri.Port
