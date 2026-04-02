@@ -18,6 +18,7 @@ Responsabilidades:
 
 - Resolver ejecutables (`bun`, `openclaw`) desde PATH.
 - Cargar configuracion por perfiles desde `.claudexrc`/`.claudexrc.json`.
+- Seleccionar y montar pack de skills desde `skillpacks/<pack>`.
 - Detectar/seleccionar puerto de proxy.
 - Levantar OpenClaw gateway solo cuando `UPSTREAM_URL` apunta a host local base.
 - Cerrar solo el proxy previo de Claudex usando PID registrado en `.claude_tmp/run/proxy.pid`.
@@ -64,6 +65,7 @@ Responsabilidades:
 - Aislar configuracion en `.claude_tmp` para no contaminar configuracion global.
 - Resolver dependencias en runtime para mayor portabilidad entre maquinas.
 - Priorizar configuracion declarativa por proyecto (`.claudexrc`) sin hardcode de proveedor/modelo.
+- Cargar skills por pack para balancear cobertura técnica vs costo de tokens.
 
 ## Riesgos actuales
 

@@ -73,7 +73,30 @@ Remove-Item Env:CLAUDEX_PROFILE -ErrorAction SilentlyContinue
 claudex
 ```
 
-## 5) Error 401/403 en proxy
+## 5) Skills pack no cargada
+
+### Sintoma
+
+El launcher muestra `Skills pack '<x>' no encontrado` o no aparecen skills esperadas.
+
+### Acciones
+
+1. Verificar ruta:
+
+```powershell
+Get-ChildItem .\skillpacks
+```
+
+2. Probar pack default:
+
+```powershell
+$env:CLAUDEX_SKILLS_PACK='token-lean'
+claudex
+```
+
+3. Si usas perfil en `.claudexrc`, revisar `skillsPack` del perfil.
+
+## 6) Error 401/403 en proxy
 
 ### Sintoma
 
@@ -85,7 +108,7 @@ claudex
 2. Validar que OpenClaw gateway espera el mismo esquema de auth (`UPSTREAM_AUTH_HEADER`).
 3. Reiniciar launcher.
 
-## 6) Upstream remoto bloqueado por seguridad
+## 7) Upstream remoto bloqueado por seguridad
 
 ### Sintoma
 
@@ -103,7 +126,7 @@ claudex
 
 3. No usar tokens productivos en hosts no confiables.
 
-## 7) Puerto ocupado
+## 8) Puerto ocupado
 
 ### Sintoma
 
@@ -123,7 +146,7 @@ netstat -ano | findstr 8787
 
 Nota: el proxy ya intenta puertos alternativos automaticamente.
 
-## 8) La TUI abre pero no responde
+## 9) La TUI abre pero no responde
 
 ### Sintoma
 
@@ -136,7 +159,7 @@ Interfaz visible, pero requests sin respuesta.
 3. Probar upstream manual con curl/httpie si aplica.
 4. Reintentar con arranque manual por etapas (ver `docs/OPERATIONS.md`).
 
-## 9) Permisos o trust prompts inesperados
+## 10) Permisos o trust prompts inesperados
 
 ### Sintoma
 

@@ -6,31 +6,44 @@
       "model": "gpt-5.4",
       "authHeader": "authorization",
       "localOnly": true,
-      "maxBudgetUsd": 2
+      "maxBudgetUsd": 2,
+      "skillsPack": "token-lean"
+    },
+    "openai-pro": {
+      "upstreamUrl": "http://127.0.0.1:18789",
+      "model": "gpt-5.4",
+      "authHeader": "authorization",
+      "localOnly": true,
+      "maxBudgetUsd": 2,
+      "skillsPack": "engineering-pro"
     },
     "gemini": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "gemini-2.5-pro",
       "authHeader": "authorization",
-      "localOnly": true
+      "localOnly": true,
+      "skillsPack": "token-lean"
     },
     "grok": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "grok-3",
       "authHeader": "authorization",
-      "localOnly": true
+      "localOnly": true,
+      "skillsPack": "token-lean"
     },
     "kimi": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "kimi-k2-instruct",
       "authHeader": "authorization",
-      "localOnly": true
+      "localOnly": true,
+      "skillsPack": "token-lean"
     },
     "ollama": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "qwen2.5-coder:7b",
       "authHeader": "authorization",
-      "localOnly": true
+      "localOnly": true,
+      "skillsPack": "token-lean"
     }
   }
 }

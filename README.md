@@ -12,6 +12,7 @@ Claudex es un fork operativo del CLI de Claude Code para correr en modo local co
 - [Uso diario](#uso-diario)
 - [Configuracion](#configuracion)
 - [Perfiles con .claudexrc](#perfiles-con-claudexrc)
+- [Skills preconfiguradas](#skills-preconfiguradas)
 - [Scripts principales](#scripts-principales)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Flujo de desarrollo](#flujo-de-desarrollo)
@@ -49,6 +50,7 @@ Documentacion tecnica extendida:
 - `docs/ARCHITECTURE.md`
 - `docs/OPERATIONS.md`
 - `docs/TROUBLESHOOTING.md`
+- `docs/THIRD_PARTY_SKILLS.md`
 
 ## Requisitos
 
@@ -107,6 +109,13 @@ Get-Command claudex
 Copy-Item .\.claudexrc.example.json .\.claudexrc.json
 ```
 
+7. (Opcional) activar perfil + pack de skills:
+
+```powershell
+$env:CLAUDEX_PROFILE='openai'
+$env:CLAUDEX_SKILLS_PACK='token-lean'
+```
+
 ## Uso diario
 
 Desde cualquier carpeta:
@@ -142,6 +151,7 @@ Variables importantes del launcher:
 - `CLAUDEX_MAX_BUDGET_USD`: presupuesto maximo por sesion (inyecta `--max-budget-usd` si no se pasa manualmente).
 - `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`/`.claudexrc.json`.
 - `CLAUDEX_CONFIG`: ruta explicita a un archivo de config JSON.
+- `CLAUDEX_SKILLS_PACK`: pack de skills precargadas (`token-lean` por defecto, `engineering-pro` disponible).
 - `CLAUDE_CONFIG_DIR`: carpeta aislada de configuracion local (`.claude_tmp`).
 
 La resolucion de `bun` y `openclaw` se hace por PATH en runtime, con error explicito si falta alguna herramienta.
@@ -177,6 +187,26 @@ Plantilla lista:
 
 - `.claudexrc.example.json`
 
+## Skills preconfiguradas
+
+Claudex incluye packs de skills listos para usar y pensados para ingeniería de software:
+
+- `token-lean` (default): menor huella de contexto/tokens.
+- `engineering-pro`: mayor cobertura técnica (frontend/devops/security/qa/arquitectura).
+
+Los packs se cargan automáticamente en runtime según `CLAUDEX_SKILLS_PACK` o `skillsPack` del perfil de `.claudexrc`.
+
+Ruta de packs en este repo:
+
+- `skillpacks/token-lean`
+- `skillpacks/engineering-pro`
+
+Origen de skills comunitarias:
+
+- Repositorio: `https://github.com/alirezarezvani/claude-skills`
+- Licencia: MIT
+- Detalle de atribución: `docs/THIRD_PARTY_SKILLS.md`
+
 ## Scripts principales
 
 - `claudex.cmd`: entrypoint corto.
@@ -184,6 +214,7 @@ Plantilla lista:
 - `scripts/install-claudex.ps1`: instalacion del comando global.
 - `src/tools/openclaw-proxy.ts`: traductor Anthropic <-> OpenAI Chat Completions.
 - `src/tools/ollama-cli.ts`: utilidad CLI para probar Ollama directo.
+- `skillpacks/*`: packs de skills preconfiguradas para rendimiento/cobertura.
 
 NPM/Bun scripts:
 
@@ -215,6 +246,9 @@ NPM/Bun scripts:
 |   |-- ARCHITECTURE.md
 |   |-- OPERATIONS.md
 |   `-- TROUBLESHOOTING.md
+|-- skillpacks/
+|   |-- token-lean/
+|   `-- engineering-pro/
 |-- workspace/
 |   |-- SOUL.md
 |   |-- USER.md

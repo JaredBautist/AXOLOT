@@ -15,6 +15,13 @@ $env:CLAUDEX_PROFILE='openai'
 claudex
 ```
 
+Si quieres cambiar pack de skills:
+
+```powershell
+$env:CLAUDEX_SKILLS_PACK='engineering-pro'   # o token-lean
+claudex
+```
+
 ## Arranque manual por etapas
 
 Cuando se requiere depuracion fina:
@@ -92,6 +99,7 @@ del arbol completo heredado del upstream.
 - `CLAUDEX_MAX_BUDGET_USD`: limita gasto por sesion sin pasar flags en cada ejecucion.
 - `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`.
 - `CLAUDEX_CONFIG`: ruta explicita del archivo de config.
+- `CLAUDEX_SKILLS_PACK`: pack de skills preconfiguradas (`token-lean`/`engineering-pro`).
 
 ## Perfiles por proyecto
 
@@ -107,6 +115,13 @@ Copy-Item .\.claudexrc.example.json .\.claudexrc.json
 Regla de precedencia:
 
 `env vars > perfil .claudexrc > defaults`.
+
+## Packs de skills
+
+- `token-lean`: pack recomendado cuando prioridad es ahorrar tokens.
+- `engineering-pro`: pack más amplio para tareas especializadas.
+
+Ambos se cargan automáticamente con `--add-dir` desde `skillpacks/<pack>/.claude/skills`.
 
 ## Control de gasto
 

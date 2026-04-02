@@ -227,11 +227,13 @@ $upstreamAuthHeader = Resolve-ConfigSetting -EnvName 'UPSTREAM_AUTH_HEADER' -Pro
 $localOnlyRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_UPSTREAM_LOCAL_ONLY' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('localOnly', 'upstreamLocalOnly') -DefaultValue '1'
 $maxBudgetRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_MAX_BUDGET_USD' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('maxBudgetUsd', 'max_budget_usd') -DefaultValue $null
 $proxyPortRaw = Resolve-ConfigSetting -EnvName 'PROXY_PORT' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('proxyPort', 'proxy_port') -DefaultValue $null
+$skillsPackRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_SKILLS_PACK' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('skillsPack', 'skills_pack') -DefaultValue 'token-lean'
 
 $env:UPSTREAM_URL = "$upstreamUrl"
 $env:UPSTREAM_MODEL = "$upstreamModel"
 $env:UPSTREAM_AUTH_HEADER = "$upstreamAuthHeader"
 $env:CLAUDEX_UPSTREAM_LOCAL_ONLY = (To-FlagString -Value $localOnlyRaw -DefaultValue '1')
+$env:CLAUDEX_SKILLS_PACK = "$skillsPackRaw"
 if (Has-Value $upstreamChatPath) {
   $env:UPSTREAM_CHAT_PATH = "$upstreamChatPath"
 }
@@ -267,11 +269,32 @@ if (-not $env:UPSTREAM_AUTH) {
   Write-Host '[scripts] Aviso: UPSTREAM_AUTH no esta definido. Si tu gateway requiere token, exportalo antes de ejecutar claudex.'
 }
 
+$selectedSkillsPackName = if (Has-Value $env:CLAUDEX_SKILLS_PACK) { $env:CLAUDEX_SKILLS_PACK } else { 'token-lean' }
+$selectedSkillsPackDir = $null
+$packDirCandidate = Join-Path $repoRoot "skillpacks\$selectedSkillsPackName"
+$packSkillsDirCandidate = Join-Path $packDirCandidate '.claude\skills'
+if (Test-Path -LiteralPath $packSkillsDirCandidate -PathType Container) {
+  $selectedSkillsPackDir = $packDirCandidate
+} else {
+  $fallbackPackName = 'token-lean'
+  $fallbackPackDir = Join-Path $repoRoot "skillpacks\$fallbackPackName"
+  $fallbackPackSkillsDir = Join-Path $fallbackPackDir '.claude\skills'
+  if ($selectedSkillsPackName -ne $fallbackPackName -and (Test-Path -LiteralPath $fallbackPackSkillsDir -PathType Container)) {
+    Write-Host "[scripts] Skills pack '$selectedSkillsPackName' no existe. Usando fallback '$fallbackPackName'."
+    $selectedSkillsPackName = $fallbackPackName
+    $selectedSkillsPackDir = $fallbackPackDir
+  } else {
+    Write-Host "[scripts] Skills pack '$selectedSkillsPackName' no encontrado. Continuando sin pack de skills."
+  }
+}
+$env:CLAUDEX_SKILLS_PACK = $selectedSkillsPackName
+
 # Fuerza workspace confiable y accesible
 $workspaceHostEntries = @(
   $repoRoot,
   "$repoRoot\src",
   $launchDir,
+  $selectedSkillsPackDir,
   "$env:USERPROFILE\.openclaw\workspace"
 ) | Where-Object { Has-Value $_ } | Select-Object -Unique
 $workspaceHostPaths = ($workspaceHostEntries -join '|')
@@ -303,6 +326,9 @@ Write-Host "         UPSTREAM_URL   = $($env:UPSTREAM_URL)"
 Write-Host "         UPSTREAM_MODEL = $($env:UPSTREAM_MODEL)"
 Write-Host "         AUTH_HEADER    = $($env:UPSTREAM_AUTH_HEADER)"
 Write-Host "         LOCAL_ONLY     = $($env:CLAUDEX_UPSTREAM_LOCAL_ONLY)"
+if (Has-Value $selectedSkillsPackDir) {
+  Write-Host "         SKILLS_PACK    = $selectedSkillsPackName"
+}
 if (Has-Value $profileName) {
   Write-Host "         PROFILE        = $profileName"
 }
@@ -365,6 +391,11 @@ $homePath = $env:CLAUDE_CONFIG_DIR.Substring($homeDrive.Length)
 $homeDriveEscaped = $homeDrive.Replace("'", "''")
 $homePathEscaped = $homePath.Replace("'", "''")
 $escapedExtraArgs = ($forwardedCliArgs | ForEach-Object { "'$($_.Replace("'", "''"))'" }) -join ' '
+$addDirsForCli = @($launchDir, $repoRoot, "$repoRoot\src")
+if (Has-Value $selectedSkillsPackDir) {
+  $addDirsForCli += $selectedSkillsPackDir
+}
+$escapedAddDirArgs = (($addDirsForCli | Select-Object -Unique) | ForEach-Object { "--add-dir '$($_.Replace("'", "''"))'" }) -join ' '
 $titleGateway = if ($null -ne $gatewayPort) { $gatewayPort } else { 'externo' }
 
 $cliCmd = @"
@@ -385,7 +416,7 @@ $cliCmd = @"
 Set-Location '$repoRootEscaped';
 `$host.UI.RawUI.WindowTitle = 'Claude CLI (gateway=$titleGateway, proxy=$($env:PROXY_PORT))';
 `$ProgressPreference='SilentlyContinue';
-& '$bunCliPath' run '$entryScriptEscaped' --dangerously-skip-permissions --allow-dangerously-skip-permissions --permission-mode bypassPermissions --add-dir '$trustedRootEscaped' --add-dir '$repoRootEscaped' --add-dir '$repoRootEscaped\\src' --settings '$repoRootEscaped\\.claude_tmp\\settings.json' $escapedExtraArgs
+& '$bunCliPath' run '$entryScriptEscaped' --dangerously-skip-permissions --allow-dangerously-skip-permissions --permission-mode bypassPermissions $escapedAddDirArgs --settings '$repoRootEscaped\\.claude_tmp\\settings.json' $escapedExtraArgs
 "@
 
 Start-Process -FilePath powershell -ArgumentList '-NoExit', '-Command', $cliCmd -WindowStyle Normal -PassThru | Out-Null
