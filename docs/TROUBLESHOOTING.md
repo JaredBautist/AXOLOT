@@ -51,7 +51,29 @@ Get-Command openclaw
 
 3. Reintentar `claudex`.
 
-## 4) Error 401/403 en proxy
+## 4) Error en `.claudexrc`
+
+### Sintoma
+
+El launcher falla con mensaje de perfil inexistente o JSON invalido.
+
+### Acciones
+
+1. Validar JSON:
+
+```powershell
+Get-Content .\.claudexrc.json | ConvertFrom-Json
+```
+
+2. Confirmar que `CLAUDEX_PROFILE` existe en `profiles`.
+3. Probar sin perfil:
+
+```powershell
+Remove-Item Env:CLAUDEX_PROFILE -ErrorAction SilentlyContinue
+claudex
+```
+
+## 5) Error 401/403 en proxy
 
 ### Sintoma
 
@@ -63,7 +85,7 @@ Get-Command openclaw
 2. Validar que OpenClaw gateway espera el mismo esquema de auth (`UPSTREAM_AUTH_HEADER`).
 3. Reiniciar launcher.
 
-## 5) Upstream remoto bloqueado por seguridad
+## 6) Upstream remoto bloqueado por seguridad
 
 ### Sintoma
 
@@ -81,7 +103,7 @@ claudex
 
 3. No usar tokens productivos en hosts no confiables.
 
-## 6) Puerto ocupado
+## 7) Puerto ocupado
 
 ### Sintoma
 
@@ -101,7 +123,7 @@ netstat -ano | findstr 8787
 
 Nota: el proxy ya intenta puertos alternativos automaticamente.
 
-## 7) La TUI abre pero no responde
+## 8) La TUI abre pero no responde
 
 ### Sintoma
 
@@ -114,7 +136,7 @@ Interfaz visible, pero requests sin respuesta.
 3. Probar upstream manual con curl/httpie si aplica.
 4. Reintentar con arranque manual por etapas (ver `docs/OPERATIONS.md`).
 
-## 8) Permisos o trust prompts inesperados
+## 9) Permisos o trust prompts inesperados
 
 ### Sintoma
 

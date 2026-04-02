@@ -8,6 +8,13 @@ claudex
 
 Esto inicia los servicios necesarios y abre la TUI.
 
+Si quieres usar un perfil:
+
+```powershell
+$env:CLAUDEX_PROFILE='openai'
+claudex
+```
+
 ## Arranque manual por etapas
 
 Cuando se requiere depuracion fina:
@@ -77,11 +84,29 @@ del arbol completo heredado del upstream.
 ## Variables operativas recomendadas
 
 - `UPSTREAM_MODEL`: permitir override por session.
+- `UPSTREAM_CHAT_PATH`: ruta custom para proveedores con path no estandar.
 - `UPSTREAM_AUTH`: inyectar por secreto local, no hardcode productivo.
 - `UPSTREAM_AUTH_HEADER`: elegir esquema segun gateway (`authorization` o `x-api-key`).
 - `PROXY_PORT`: fijar solo si se integra con tooling externo.
 - `CLAUDEX_UPSTREAM_LOCAL_ONLY=1`: evita exfiltracion accidental de tokens.
 - `CLAUDEX_MAX_BUDGET_USD`: limita gasto por sesion sin pasar flags en cada ejecucion.
+- `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`.
+- `CLAUDEX_CONFIG`: ruta explicita del archivo de config.
+
+## Perfiles por proyecto
+
+1. Copiar plantilla:
+
+```powershell
+Copy-Item .\.claudexrc.example.json .\.claudexrc.json
+```
+
+2. Editar perfiles/modelos.
+3. Elegir perfil con `CLAUDEX_PROFILE`.
+
+Regla de precedencia:
+
+`env vars > perfil .claudexrc > defaults`.
 
 ## Control de gasto
 

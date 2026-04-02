@@ -17,8 +17,9 @@ Reutilizar la experiencia CLI/TUI de Claude Code y desacoplarla del backend Anth
 Responsabilidades:
 
 - Resolver ejecutables (`bun`, `openclaw`) desde PATH.
+- Cargar configuracion por perfiles desde `.claudexrc`/`.claudexrc.json`.
 - Detectar/seleccionar puerto de proxy.
-- Levantar OpenClaw gateway si no existe listener en `18789`.
+- Levantar OpenClaw gateway solo cuando `UPSTREAM_URL` apunta a host local base.
 - Cerrar solo el proxy previo de Claudex usando PID registrado en `.claude_tmp/run/proxy.pid`.
 - Levantar proxy Bun (`src/tools/openclaw-proxy.ts`).
 - Exportar variables de entorno de compatibilidad Anthropic.
@@ -62,6 +63,7 @@ Responsabilidades:
 - Mantener contrato Anthropic en frontend para minimizar cambios en TUI.
 - Aislar configuracion en `.claude_tmp` para no contaminar configuracion global.
 - Resolver dependencias en runtime para mayor portabilidad entre maquinas.
+- Priorizar configuracion declarativa por proyecto (`.claudexrc`) sin hardcode de proveedor/modelo.
 
 ## Riesgos actuales
 

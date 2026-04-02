@@ -11,6 +11,7 @@ Claudex es un fork operativo del CLI de Claude Code para correr en modo local co
 - [Instalacion](#instalacion)
 - [Uso diario](#uso-diario)
 - [Configuracion](#configuracion)
+- [Perfiles con .claudexrc](#perfiles-con-claudexrc)
 - [Scripts principales](#scripts-principales)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Flujo de desarrollo](#flujo-de-desarrollo)
@@ -100,6 +101,12 @@ Get-Command claudex
 
 5. (Opcional) definir variables en tu entorno usando `.env.example` como referencia, especialmente `UPSTREAM_AUTH` si tu gateway exige autenticacion.
 
+6. (Opcional) crear perfiles:
+
+```powershell
+Copy-Item .\.claudexrc.example.json .\.claudexrc.json
+```
+
 ## Uso diario
 
 Desde cualquier carpeta:
@@ -127,14 +134,48 @@ Variables importantes del launcher:
 
 - `PROXY_PORT`: puerto del proxy.
 - `UPSTREAM_URL`: endpoint del gateway OpenClaw.
+- `UPSTREAM_CHAT_PATH`: ruta de chat para upstreams personalizados.
 - `UPSTREAM_MODEL`: modelo enviado al upstream.
 - `UPSTREAM_AUTH`: token de autenticacion hacia upstream.
 - `UPSTREAM_AUTH_HEADER`: header para token (`authorization` por defecto, o `x-api-key`).
 - `CLAUDEX_UPSTREAM_LOCAL_ONLY`: `1` por defecto para bloquear upstream remoto y evitar fuga accidental de token.
 - `CLAUDEX_MAX_BUDGET_USD`: presupuesto maximo por sesion (inyecta `--max-budget-usd` si no se pasa manualmente).
+- `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`/`.claudexrc.json`.
+- `CLAUDEX_CONFIG`: ruta explicita a un archivo de config JSON.
 - `CLAUDE_CONFIG_DIR`: carpeta aislada de configuracion local (`.claude_tmp`).
 
 La resolucion de `bun` y `openclaw` se hace por PATH en runtime, con error explicito si falta alguna herramienta.
+
+Prioridad de configuracion: `variables de entorno > perfil .claudexrc > defaults internos`.
+
+## Perfiles con .claudexrc
+
+Claudex soporta perfiles por proyecto o por entorno.
+
+Archivos detectados automaticamente (en este orden):
+
+1. `CLAUDEX_CONFIG` (si esta definido)
+2. `.claudexrc.json` en carpeta actual
+3. `.claudexrc` en carpeta actual
+4. `.claudexrc.json` en la raiz de Claudex
+5. `.claudexrc` en la raiz de Claudex
+
+Seleccion de perfil:
+
+- `CLAUDEX_PROFILE=<nombre>` para elegir uno.
+- Si no existe, usa `defaultProfile`.
+- Si no hay perfil, usa valores base.
+
+Ejemplo de uso:
+
+```powershell
+$env:CLAUDEX_PROFILE='gemini'
+claudex
+```
+
+Plantilla lista:
+
+- `.claudexrc.example.json`
 
 ## Scripts principales
 
