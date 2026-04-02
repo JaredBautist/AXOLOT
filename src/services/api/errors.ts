@@ -422,6 +422,47 @@ export function extractUnknownErrorFormat(value: unknown): string | undefined {
   return undefined
 }
 
+function getHeaderValue(headers: unknown, headerName: string): string | null {
+  if (!headers || typeof headers !== 'object') {
+    return null
+  }
+
+  const maybeGet = (headers as { get?: unknown }).get
+  if (typeof maybeGet === 'function') {
+    const value = maybeGet.call(headers, headerName)
+    if (typeof value === 'string') {
+      return value
+    }
+    if (value == null) {
+      return null
+    }
+    return String(value)
+  }
+
+  const targetHeader = headerName.toLowerCase()
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== targetHeader) {
+      continue
+    }
+    if (typeof value === 'string') {
+      return value
+    }
+    if (Array.isArray(value)) {
+      const firstValue = value.find((entry) => entry != null)
+      if (firstValue == null) {
+        return null
+      }
+      return String(firstValue)
+    }
+    if (value == null) {
+      return null
+    }
+    return String(value)
+  }
+
+  return null
+}
+
 export function getAssistantMessageFromError(
   error: unknown,
   model: string,
@@ -468,11 +509,13 @@ export function getAssistantMessageFromError(
     shouldProcessRateLimits(isClaudeAISubscriber())
   ) {
     // Check if this is the new API with multiple rate limit headers
-    const rateLimitType = error.headers?.get?.(
+    const rateLimitType = getHeaderValue(
+      error.headers,
       'anthropic-ratelimit-unified-representative-claim',
     ) as 'five_hour' | 'seven_day' | 'seven_day_opus' | null
 
-    const overageStatus = error.headers?.get?.(
+    const overageStatus = getHeaderValue(
+      error.headers,
       'anthropic-ratelimit-unified-overage-status',
     ) as 'allowed' | 'allowed_warning' | 'rejected' | null
 
@@ -486,7 +529,8 @@ export function getAssistantMessageFromError(
       }
 
       // Extract rate limit information from headers
-      const resetHeader = error.headers?.get?.(
+      const resetHeader = getHeaderValue(
+        error.headers,
         'anthropic-ratelimit-unified-reset',
       )
       if (resetHeader) {
@@ -501,14 +545,16 @@ export function getAssistantMessageFromError(
         limits.overageStatus = overageStatus
       }
 
-      const overageResetHeader = error.headers?.get?.(
+      const overageResetHeader = getHeaderValue(
+        error.headers,
         'anthropic-ratelimit-unified-overage-reset',
       )
       if (overageResetHeader) {
         limits.overageResetsAt = Number(overageResetHeader)
       }
 
-      const overageDisabledReason = error.headers?.get?.(
+      const overageDisabledReason = getHeaderValue(
+        error.headers,
         'anthropic-ratelimit-unified-overage-disabled-reason',
       ) as OverageDisabledReason | null
       if (overageDisabledReason) {

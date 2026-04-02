@@ -83,6 +83,20 @@ export const CLAUDE_SONNET_4_6_CONFIG = {
   foundry: 'claude-sonnet-4-6',
 } as const satisfies ModelConfig
 
+export const OPENAI_CODEX_5_4_CONFIG = {
+  firstParty: 'openai-codex/gpt-5.4',
+  bedrock: 'openai-codex/gpt-5.4',
+  vertex: 'openai-codex/gpt-5.4',
+  foundry: 'openai-codex/gpt-5.4',
+} as const satisfies ModelConfig
+
+export const OPENCLAW_MODEL_CONFIG = {
+  firstParty: 'openai-codex/gpt-5.4',
+  bedrock: 'openai-codex/gpt-5.4',
+  vertex: 'openai-codex/gpt-5.4',
+  foundry: 'openai-codex/gpt-5.4',
+} as const satisfies ModelConfig
+
 // @[MODEL LAUNCH]: Register the new config here.
 export const ALL_MODEL_CONFIGS = {
   haiku35: CLAUDE_3_5_HAIKU_CONFIG,
@@ -92,6 +106,8 @@ export const ALL_MODEL_CONFIGS = {
   sonnet40: CLAUDE_SONNET_4_CONFIG,
   sonnet45: CLAUDE_SONNET_4_5_CONFIG,
   sonnet46: CLAUDE_SONNET_4_6_CONFIG,
+  codex54: OPENAI_CODEX_5_4_CONFIG,
+  openclaw: OPENCLAW_MODEL_CONFIG,
   opus40: CLAUDE_OPUS_4_CONFIG,
   opus41: CLAUDE_OPUS_4_1_CONFIG,
   opus45: CLAUDE_OPUS_4_5_CONFIG,

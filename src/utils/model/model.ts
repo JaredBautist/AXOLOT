@@ -277,6 +277,9 @@ export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
  * @returns The short name (e.g., 'claude-3-5-haiku') if found, or the original name if no mapping exists
  */
 export function getCanonicalName(fullModelName: ModelName): ModelShortName {
+  if (fullModelName.includes('openai-codex') || fullModelName.includes('gpt-5.4')) {
+    return 'openai-codex/gpt-5.4' as ModelShortName
+  }
   // Resolve overridden model IDs (e.g. Bedrock ARNs) back to canonical names.
   // resolved is always a 1P-format ID, so firstPartyNameToCanonical can handle it.
   return firstPartyNameToCanonical(resolveOverriddenModel(fullModelName))
@@ -451,6 +454,10 @@ export function parseUserSpecifiedModel(
 ): ModelName {
   const modelInputTrimmed = modelInput.trim()
   const normalizedModel = modelInputTrimmed.toLowerCase()
+
+  if (normalizedModel.includes('openai-codex') || normalizedModel.includes('gpt-5.4')) {
+    return 'openai-codex/gpt-5.4' as ModelName
+  }
 
   const has1mTag = has1mContext(normalizedModel)
   const modelString = has1mTag

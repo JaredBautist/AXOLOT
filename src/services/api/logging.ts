@@ -108,13 +108,11 @@ function detectGateway({
   headers,
   baseUrl,
 }: {
-  headers?: globalThis.Headers
+  headers?: unknown
   baseUrl?: string
 }): KnownGateway | undefined {
-  if (headers) {
-    // Header names are already lowercase from the Headers API
-    const headerNames: string[] = []
-    headers.forEach((_, key) => headerNames.push(key))
+  const headerNames = getHeaderNames(headers)
+  if (headerNames.length > 0) {
     for (const [gw, { prefixes }] of Object.entries(GATEWAY_FINGERPRINTS)) {
       if (prefixes.some(p => headerNames.some(h => h.startsWith(p)))) {
         return gw as KnownGateway
@@ -136,6 +134,36 @@ function detectGateway({
   }
 
   return undefined
+}
+
+function getHeaderNames(headers: unknown): string[] {
+  if (!headers || typeof headers !== 'object') {
+    return []
+  }
+
+  const maybeForEach = (headers as { forEach?: unknown }).forEach
+  if (typeof maybeForEach === 'function') {
+    const names: string[] = []
+    maybeForEach.call(headers, (_: unknown, key: string) => {
+      if (typeof key === 'string') {
+        names.push(key.toLowerCase())
+      }
+    })
+    return names
+  }
+
+  const maybeEntries = (headers as { entries?: unknown }).entries
+  if (typeof maybeEntries === 'function') {
+    const names: string[] = []
+    for (const entry of maybeEntries.call(headers) as Iterable<unknown>) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string') {
+        names.push(entry[0].toLowerCase())
+      }
+    }
+    return names
+  }
+
+  return Object.keys(headers).map((key) => key.toLowerCase())
 }
 
 function getAnthropicEnvMetadata() {

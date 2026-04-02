@@ -224,6 +224,7 @@ $upstreamUrl = Resolve-ConfigSetting -EnvName 'UPSTREAM_URL' -ProfileConfig $pro
 $upstreamModel = Resolve-ConfigSetting -EnvName 'UPSTREAM_MODEL' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('model', 'upstreamModel', 'upstream_model') -DefaultValue 'openclaw'
 $upstreamChatPath = Resolve-ConfigSetting -EnvName 'UPSTREAM_CHAT_PATH' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('chatPath', 'upstreamChatPath', 'upstream_chat_path') -DefaultValue ''
 $upstreamAuthHeader = Resolve-ConfigSetting -EnvName 'UPSTREAM_AUTH_HEADER' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('authHeader', 'upstreamAuthHeader', 'upstream_auth_header') -DefaultValue 'authorization'
+$upstreamAuth = Resolve-ConfigSetting -EnvName 'UPSTREAM_AUTH' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('auth', 'upstreamAuth', 'upstream_auth', 'token', 'key') -DefaultValue '4826b470842264d01279842f13bb7d4e31270b59ab3224dd'
 $localOnlyRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_UPSTREAM_LOCAL_ONLY' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('localOnly', 'upstreamLocalOnly') -DefaultValue '1'
 $maxBudgetRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_MAX_BUDGET_USD' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('maxBudgetUsd', 'max_budget_usd') -DefaultValue $null
 $proxyPortRaw = Resolve-ConfigSetting -EnvName 'PROXY_PORT' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('proxyPort', 'proxy_port') -DefaultValue $null
@@ -231,7 +232,11 @@ $skillsPackRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_SKILLS_PACK' -ProfileCo
 
 $env:UPSTREAM_URL = "$upstreamUrl"
 $env:UPSTREAM_MODEL = "$upstreamModel"
+$env:ANTHROPIC_MODEL = "$upstreamModel"
 $env:UPSTREAM_AUTH_HEADER = "$upstreamAuthHeader"
+if ($null -ne $upstreamAuth) {
+  $env:UPSTREAM_AUTH = "$upstreamAuth"
+}
 $env:CLAUDEX_UPSTREAM_LOCAL_ONLY = (To-FlagString -Value $localOnlyRaw -DefaultValue '1')
 $env:CLAUDEX_SKILLS_PACK = "$skillsPackRaw"
 if (Has-Value $upstreamChatPath) {
@@ -376,8 +381,8 @@ if ($forwardedCliArgs.Count -gt 0) {
   Write-Host "         CLAUDEX_ARGS   = $($forwardedCliArgs -join ' ')"
 }
 
-# El token solo lo necesita el proxy, no la TUI.
-Remove-Item Env:UPSTREAM_AUTH -ErrorAction SilentlyContinue
+# El token lo necesita el proxy para autenticar contra OpenClaw.
+# Remove-Item Env:UPSTREAM_AUTH -ErrorAction SilentlyContinue
 
 Write-Host '[scripts] Lanzando el asistente (ventana aparte para TTY real)...'
 $bunCliPath = $bunPath.Replace("'", "''")
@@ -402,6 +407,8 @@ $cliCmd = @"
 `$env:ANTHROPIC_API_URL='$($env:ANTHROPIC_API_URL)';
 `$env:ANTHROPIC_BASE_URL='$($env:ANTHROPIC_BASE_URL)';
 `$env:ANTHROPIC_API_KEY='$($env:ANTHROPIC_API_KEY)';
+`$env:UPSTREAM_MODEL='openclaw';
+`$env:ANTHROPIC_MODEL='openclaw';
 `$env:CLAUDE_CODE_SKIP_BOOTSTRAP='0';
 `$env:CLAUDE_CODE_OFFLINE_MODE='1';
 `$env:CLAUDE_CODE_DISABLE_RIPGREP='1';

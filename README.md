@@ -310,6 +310,7 @@ Casos comunes:
 - `openclaw` no encontrado -> instalar CLI de OpenClaw y validar PATH.
 - Puerto ocupado -> launcher selecciona puerto alternativo automaticamente.
 - Proxy responde 401/403 -> revisar `UPSTREAM_AUTH`.
+- Si ves `selected model ... may not exist` junto con varios `404` en proxy pero aparece al menos un `401 Unauthorized`, la causa real es auth de upstream faltante/incorrecta.
 - TUI no abre -> ejecutar `scripts/run-claude-full.ps1` manualmente para ver errores directos.
 
 Notas rapidas importantes:

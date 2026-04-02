@@ -108,6 +108,16 @@ claudex
 2. Validar que OpenClaw gateway espera el mismo esquema de auth (`UPSTREAM_AUTH_HEADER`).
 3. Reiniciar launcher.
 
+Ejemplo rapido (solo sesion actual):
+
+```powershell
+$env:UPSTREAM_AUTH='tu_token'
+$env:UPSTREAM_AUTH_HEADER='authorization'  # o 'x-api-key'
+claudex
+```
+
+Nota: si aparece `selected model ... may not exist` y en el log hay mezcla de `404` + `401 Unauthorized`, el problema real suele ser autenticacion al upstream.
+
 ## 7) Upstream remoto bloqueado por seguridad
 
 ### Sintoma

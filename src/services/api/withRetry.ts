@@ -272,7 +272,8 @@ export async function* withRetry<T>(
       ) {
         // If the 429 is specifically because extra usage (overage) is not
         // available, permanently disable fast mode with a specific message.
-        const overageReason = error.headers?.get?.(
+        const overageReason = getHeaderValue(
+          error.headers,
           'anthropic-ratelimit-unified-overage-disabled-reason',
         )
         if (overageReason !== null && overageReason !== undefined) {
@@ -517,14 +518,7 @@ export async function* withRetry<T>(
 }
 
 function getRetryAfter(error: unknown): string | null {
-  return (
-    ((error as { headers?: { 'retry-after'?: string } }).headers?.[
-      'retry-after'
-    ] ||
-      // eslint-disable-next-line eslint-plugin-n/no-unsupported-features/node-builtins
-      ((error as APIError).headers as Headers)?.get?.('retry-after')) ??
-    null
-  )
+  return getHeaderValue((error as { headers?: unknown }).headers, 'retry-after')
 }
 
 export function getRetryDelay(
@@ -729,7 +723,7 @@ function shouldRetry(error: APIError): boolean {
   }
 
   // Note this is not a standard header.
-  const shouldRetryHeader = error.headers?.get?.('x-should-retry')
+  const shouldRetryHeader = getHeaderValue(error.headers, 'x-should-retry')
 
   // If the server explicitly says whether or not to retry, obey.
   // For Max and Pro users, should-retry is true, but in several hours, so we shouldn't.
@@ -812,11 +806,55 @@ function getRetryAfterMs(error: APIError): number | null {
 }
 
 function getRateLimitResetDelayMs(error: APIError): number | null {
-  const resetHeader = error.headers?.get?.('anthropic-ratelimit-unified-reset')
+  const resetHeader = getHeaderValue(
+    error.headers,
+    'anthropic-ratelimit-unified-reset',
+  )
   if (!resetHeader) return null
   const resetUnixSec = Number(resetHeader)
   if (!Number.isFinite(resetUnixSec)) return null
   const delayMs = resetUnixSec * 1000 - Date.now()
   if (delayMs <= 0) return null
   return Math.min(delayMs, PERSISTENT_RESET_CAP_MS)
+}
+
+function getHeaderValue(headers: unknown, headerName: string): string | null {
+  if (!headers || typeof headers !== 'object') {
+    return null
+  }
+
+  const maybeGet = (headers as { get?: unknown }).get
+  if (typeof maybeGet === 'function') {
+    const value = maybeGet.call(headers, headerName)
+    if (typeof value === 'string') {
+      return value
+    }
+    if (value == null) {
+      return null
+    }
+    return String(value)
+  }
+
+  const targetHeader = headerName.toLowerCase()
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== targetHeader) {
+      continue
+    }
+    if (typeof value === 'string') {
+      return value
+    }
+    if (Array.isArray(value)) {
+      const firstValue = value.find((entry) => entry != null)
+      if (firstValue == null) {
+        return null
+      }
+      return String(firstValue)
+    }
+    if (value == null) {
+      return null
+    }
+    return String(value)
+  }
+
+  return null
 }

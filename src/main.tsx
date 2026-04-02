@@ -630,7 +630,7 @@ export async function main() {
     const tools = await getTools();
     const commands = await getCommands(process.cwd());
     const { ALL_MODEL_CONFIGS } = await import('./utils/model/configs.js');
-    const mainLoopModel = ALL_MODEL_CONFIGS.sonnet46.firstParty;
+    const mainLoopModel = process.env.UPSTREAM_MODEL || process.env.ANTHROPIC_MODEL || ALL_MODEL_CONFIGS.sonnet46.firstParty;
     
     // Lanzamos el chat con motor real y comandos
     const instance = render(

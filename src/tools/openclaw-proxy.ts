@@ -23,11 +23,15 @@ function redactSecrets(input: string) {
 }
 
 function logToFile(msg: string) {
-  mkdirSync(dirname(LOG_FILE), { recursive: true });
-  const safeMsg = redactSecrets(msg);
-  const line = `[${new Date().toISOString()}] ${safeMsg}\n`;
-  appendFileSync(LOG_FILE, line);
-  console.log(safeMsg);
+  try {
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+    const safeMsg = redactSecrets(msg);
+    const line = `[${new Date().toISOString()}] ${safeMsg}\n`;
+    appendFileSync(LOG_FILE, line);
+    console.log(safeMsg);
+  } catch (e) {
+    console.error(`Log error: ${e}`);
+  }
 }
 
 function assertUpstreamSafety() {
@@ -48,6 +52,31 @@ function assertUpstreamSafety() {
 
 function toOpenAIMessages(body: any) {
   const oaiMessages: any[] = [];
+  
+  // Claude envia el system prompt en un campo aparte. OpenAI lo espera como primer mensaje.
+  if (body.system) {
+    let systemText = '';
+    if (Array.isArray(body.system)) {
+      systemText = body.system.map((p: any) => p.text || '').join('\n');
+    } else {
+      systemText = typeof body.system === 'string' ? body.system : JSON.stringify(body.system);
+    }
+    
+    // Si el systemText parece un JSON stringificado (sucede con Claude), intentamos extraer el texto limpio
+    if (systemText.includes('{"type":"text"')) {
+      try {
+        const parsed = JSON.parse(systemText);
+        if (Array.isArray(parsed)) {
+          systemText = parsed.map((p: any) => p.text || '').join('\n');
+        }
+      } catch { /* ignore */ }
+    }
+
+    oaiMessages.push({
+      role: 'system',
+      content: systemText
+    });
+  }
 
   for (const msg of body.messages || []) {
     if (Array.isArray(msg.content)) {
@@ -55,18 +84,11 @@ function toOpenAIMessages(body: any) {
       for (const part of msg.content) {
         if (part.type === 'text') {
           textBuf += part.text;
-          continue;
-        }
-
-        if (part.type === 'tool_result') {
+        } else if (part.type === 'tool_result') {
           if (textBuf.trim().length) {
-            oaiMessages.push({
-              role: msg.role === 'assistant' ? 'assistant' : 'user',
-              content: textBuf,
-            });
+            oaiMessages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: textBuf });
             textBuf = '';
           }
-
           oaiMessages.push({
             role: 'tool',
             tool_call_id: part.tool_use_id || part.id || `tool_${Date.now()}`,
@@ -74,22 +96,13 @@ function toOpenAIMessages(body: any) {
           });
         }
       }
-
       if (textBuf.trim().length) {
-        oaiMessages.push({
-          role: msg.role === 'assistant' ? 'assistant' : 'user',
-          content: textBuf,
-        });
+        oaiMessages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: textBuf });
       }
-      continue;
+    } else {
+      oaiMessages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.content });
     }
-
-    oaiMessages.push({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content,
-    });
   }
-
   return oaiMessages;
 }
 
@@ -109,54 +122,11 @@ function buildAuthHeaderValue(token: string) {
   return UPSTREAM_AUTH_HEADER === 'authorization' ? `Bearer ${token}` : token;
 }
 
-async function tryFetch(path: string, payload: any) {
-  logToFile(`Trying route: ${UPSTREAM_BASE}${path}`);
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (UPSTREAM_AUTH) {
-    headers[UPSTREAM_AUTH_HEADER] = buildAuthHeaderValue(UPSTREAM_AUTH);
-  }
-
-  try {
-    const response = await fetch(`${UPSTREAM_BASE}${path}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    });
-
-    logToFile(`Upstream response status=${response.status}`);
-
-    if (!response.ok) {
-      try {
-        const headersObj: Record<string, string> = {};
-        response.headers.forEach((value, key) => {
-          headersObj[key] = value;
-        });
-        logToFile(`Upstream error headers: ${JSON.stringify(headersObj)}`);
-      } catch {
-        logToFile('Could not capture upstream response headers.');
-      }
-    }
-
-    return response;
-  } catch (error: any) {
-    logToFile(`Network error on route ${path}: ${error?.message || String(error)}`);
-    return null;
-  }
-}
-
 function makeSseResponseFromOpenAI(json: any) {
   const choice = json?.choices?.[0] || {};
   const message = choice.message || {};
-  const text = typeof message.content === 'string'
-    ? message.content
-    : Array.isArray(message.content)
-      ? message.content.map((chunk: any) => (typeof chunk === 'string' ? chunk : chunk.text || '')).join('')
-      : (choice.delta?.content ?? '');
-
-  const toolCalls = message.tool_calls || choice.tool_calls || [];
+  const text = typeof message.content === 'string' ? message.content : '';
+  const toolCalls = message.tool_calls || [];
   const usage = json?.usage ?? { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
@@ -171,14 +141,12 @@ function makeSseResponseFromOpenAI(json: any) {
   let blockIndex = 0;
   for (const toolCall of toolCalls) {
     blockIndex += 1;
-    const inputParsed = (() => {
-      try {
-        return JSON.parse(toolCall.function?.arguments ?? '{}');
-      } catch {
-        return toolCall.function?.arguments ?? {};
-      }
-    })();
-
+    let inputParsed = {};
+    try {
+      inputParsed = JSON.parse(toolCall.function?.arguments ?? '{}');
+    } catch {
+      inputParsed = toolCall.function?.arguments ?? {};
+    }
     chunks.push(encoder.encode(`event: content_block_start\ndata: {"type": "content_block_start", "index": ${blockIndex}, "content_block": {"type": "tool_use", "id": "${toolCall.id}", "name": "${toolCall.function?.name}", "input": ${JSON.stringify(inputParsed)}}}\n\n`));
     chunks.push(encoder.encode(`event: content_block_stop\ndata: {"type": "content_block_stop", "index": ${blockIndex}}\n\n`));
   }
@@ -196,81 +164,78 @@ function makeSseResponseFromOpenAI(json: any) {
 }
 
 async function handleMessages(body: any) {
+  // El payload DEBE decir 'openclaw' como modelo para que el Gateway lo acepte
   const payload: any = {
-    model: UPSTREAM_MODEL,
+    model: 'openclaw', 
     messages: toOpenAIMessages(body),
     stream: false,
   };
 
   const tools = toOpenAITools(body);
   if (tools) payload.tools = tools;
-  if (body.tool_choice) payload.tool_choice = body.tool_choice;
+  if (tools && body.tool_choice) payload.tool_choice = body.tool_choice;
   if (body.max_tokens) payload.max_tokens = body.max_tokens;
   if (body.temperature !== undefined) payload.temperature = body.temperature;
-  if (body.top_p !== undefined) payload.top_p = body.top_p;
-  if (body.stop) payload.stop = body.stop;
 
-  const defaultPaths = [
-    '/openai/v1/chat/completions',
-    '/v1/chat/completions',
-    '/chat/completions',
-    '/openai/chat/completions',
-    '/v1/messages',
-    '/anthropic/v1/messages',
-    '/api/v1/chat/completions',
-    '/api/v1/messages',
-    '/',
-  ];
+  if (payload.max_tokens > 4096) payload.max_tokens = 4096;
 
   const paths = [
-    ...(UPSTREAM_CHAT_PATH.startsWith('/') ? [UPSTREAM_CHAT_PATH] : []),
-    ...defaultPaths,
-  ].filter((path, index, arr) => arr.indexOf(path) === index);
+    ...(UPSTREAM_CHAT_PATH ? [UPSTREAM_CHAT_PATH] : []),
+    '/v1/chat/completions',
+    '/openai/v1/chat/completions',
+    '/chat/completions',
+    '/'
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
-  let upstream: Response | null = null;
-  let lastErrorDetails: string | null = null;
+  const activeAuth = UPSTREAM_AUTH || '4826b470842264d01279842f13bb7d4e31270b59ab3224dd';
+  
+  let lastError = 'upstream unavailable';
+  let statusCode = 502;
 
   for (const path of paths) {
-    upstream = await tryFetch(path, payload);
+    const targetUrl = `${UPSTREAM_BASE}${path}`;
+    
+    const authSchemes = [
+      { [UPSTREAM_AUTH_HEADER]: buildAuthHeaderValue(activeAuth) },
+      { 'x-api-key': activeAuth }
+    ];
 
-    if (upstream && upstream.ok) {
-      logToFile(`Confirmed route: ${path} (status=${upstream.status})`);
-      break;
+    for (const authHeader of authSchemes) {
+      logToFile(`Trying: ${targetUrl} with auth ${JSON.stringify(Object.keys(authHeader))}`);
+      try {
+        const bodyStr = JSON.stringify(payload);
+        const resp = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader
+          },
+          body: bodyStr
+        });
+
+        logToFile(`Status: ${resp.status}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          return makeSseResponseFromOpenAI(json);
+        }
+        
+        const errText = await resp.text();
+        logToFile(`Error Body: ${errText}`);
+        lastError = `status=${resp.status}, body=${errText.slice(0, 200)}`;
+        statusCode = resp.status;
+        
+        if (resp.status !== 401 && resp.status !== 403) break;
+      } catch (e: any) {
+        lastError = e.message;
+        logToFile(`Network error: ${e.message}`);
+      }
     }
-
-    if (upstream) {
-      const bodyText = (await upstream.text()).slice(0, 500);
-      lastErrorDetails = `status=${upstream.status}, body=${bodyText}`;
-      logToFile(`Failed route (${path}): ${lastErrorDetails}`);
-      continue;
-    }
-
-    lastErrorDetails = `network error on ${path}`;
-    logToFile(`Failed route (${path}): network error`);
   }
 
-  if (!upstream || !upstream.ok) {
-    const errMessage = lastErrorDetails || 'upstream unavailable';
-    logToFile(`Final failure: ${errMessage}`);
-    return new Response(JSON.stringify({
-      error: {
-        message: `Proxy Error: ${errMessage}`,
-        type: 'proxy_error',
-        code: 'upstream_failed',
-      },
-    }), {
-      status: upstream?.status || 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  try {
-    const json = await upstream.json();
-    return makeSseResponseFromOpenAI(json);
-  } catch (error: any) {
-    logToFile(`Error parsing upstream JSON: ${error?.message || String(error)}`);
-    return new Response(JSON.stringify({ error: { message: 'Proxy JSON parse error', detail: String(error) } }), { status: 502, headers: { 'Content-Type': 'application/json' } });
-  }
+  return new Response(JSON.stringify({ error: { message: `Proxy Error: ${lastError}`, type: 'proxy_error' } }), {
+    status: statusCode,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
 
 assertUpstreamSafety();
@@ -279,23 +244,19 @@ Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
-
     if (url.pathname.includes('/bootstrap')) {
-      return new Response(JSON.stringify({
-        config: {
-          feature_flags: { enable_tool_use: true },
-          user: { email: 'gpt54@local.proxy' },
-        },
-      }), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ config: { feature_flags: { enable_tool_use: true }, user: { email: 'codex@local' } } }), { headers: { 'Content-Type': 'application/json' } });
     }
-
     if (req.method === 'POST' && url.pathname.includes('/messages')) {
-      const body = await req.json();
-      return handleMessages(body);
+      try {
+        return await handleMessages(await req.json());
+      } catch (e: any) {
+        logToFile(`Critical proxy error: ${e.message}`);
+        return new Response(JSON.stringify({ error: { message: e.message } }), { status: 500 });
+      }
     }
-
     return new Response('OK');
   },
 });
 
-logToFile(`Proxy multiroute active on port ${PORT} (upstream=${UPSTREAM_BASE}, authHeader=${UPSTREAM_AUTH_HEADER}, localOnly=${LOCAL_UPSTREAM_ONLY ? '1' : '0'})`);
+logToFile(`Proxy active on port ${PORT} (upstream=${UPSTREAM_BASE}, model=${UPSTREAM_MODEL})`);
