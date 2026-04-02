@@ -6,6 +6,7 @@ const PORT = parseInt(process.env.PROXY_PORT || '8787', 10);
 const UPSTREAM_BASE = (process.env.UPSTREAM_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:18789';
 const UPSTREAM_MODEL = process.env.UPSTREAM_MODEL || 'openclaw';
 const UPSTREAM_AUTH = process.env.UPSTREAM_AUTH || '';
+const UPSTREAM_CHAT_PATH = (process.env.UPSTREAM_CHAT_PATH || '').trim();
 const LOG_FILE = process.env.CLAUDEX_PROXY_LOG || '.claude_tmp/logs/proxy-output.log';
 
 function logToFile(msg: string) {
@@ -163,7 +164,7 @@ async function handleMessages(body: any) {
   if (body.top_p !== undefined) payload.top_p = body.top_p;
   if (body.stop) payload.stop = body.stop;
 
-  const paths = [
+  const defaultPaths = [
     '/openai/v1/chat/completions',        
     '/v1/chat/completions',               
     '/chat/completions',                  
@@ -174,6 +175,10 @@ async function handleMessages(body: any) {
     '/api/v1/messages',                   
     '/'                                   
   ];
+  const paths = [
+    ...(UPSTREAM_CHAT_PATH.startsWith('/') ? [UPSTREAM_CHAT_PATH] : []),
+    ...defaultPaths,
+  ].filter((path, index, arr) => arr.indexOf(path) === index);
 
   let upstream: Response | null = null;
   let lastErrorDetails: string | null = null;
