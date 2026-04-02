@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-Set-Location (Split-Path -Parent $MyInvocation.MyCommand.Definition)
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
 
 function Resolve-CommandPath {
   param(
@@ -41,7 +42,7 @@ Write-Host '[scripts] Limpiando procesos bun...'
 Get-Process bun -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force }
 
 # Aislamiento
-$env:CLAUDE_CONFIG_DIR = "$PSScriptRoot\.claude_tmp"
+$env:CLAUDE_CONFIG_DIR = "$repoRoot\.claude_tmp"
 if (!(Test-Path $env:CLAUDE_CONFIG_DIR)) {
   New-Item -ItemType Directory -Path $env:CLAUDE_CONFIG_DIR | Out-Null
 }
@@ -51,12 +52,14 @@ $desiredPorts = @(8787, 8788, 8878, 18887)
 $env:PROXY_PORT = (Get-FreePort -Candidates $desiredPorts).ToString()
 $env:UPSTREAM_URL = 'http://127.0.0.1:18789'
 $env:UPSTREAM_MODEL = 'openclaw'
-$env:UPSTREAM_AUTH = '4826b470842264d01279842f13bb7d4e31270b59ab3224dd'
+if (-not $env:UPSTREAM_AUTH) {
+  Write-Host '[scripts] Aviso: UPSTREAM_AUTH no esta definido. Si tu gateway requiere token, exportalo antes de ejecutar claudex.'
+}
 
 # Fuerza workspace confiable y accesible
-$workspaceHostPaths = "$PSScriptRoot|$PSScriptRoot\src|$env:USERPROFILE\.openclaw\workspace"
+$workspaceHostPaths = "$repoRoot|$repoRoot\src|$env:USERPROFILE\.openclaw\workspace"
 $env:CLAUDE_CODE_WORKSPACE_HOST_PATHS = $workspaceHostPaths
-$env:CLAUDE_CODE_TRUSTED_ROOT = $PSScriptRoot
+$env:CLAUDE_CODE_TRUSTED_ROOT = $repoRoot
 
 Write-Host '[scripts] Iniciando Gateway OpenClaw (si no esta activo)...'
 $gwListening = Get-NetTCPConnection -State Listen -LocalPort 18789 -ErrorAction SilentlyContinue
@@ -79,7 +82,7 @@ Write-Host "         UPSTREAM_MODEL = $($env:UPSTREAM_MODEL)"
 # Lanzar proxy en segundo plano para no bloquear el CLI
 $proxyProc = Start-Process -FilePath $bunPath `
   -ArgumentList @('run', 'src/tools/openclaw-proxy.ts') `
-  -WorkingDirectory $PSScriptRoot `
+  -WorkingDirectory $repoRoot `
   -NoNewWindow `
   -PassThru
 Write-Host "         PROXY_PID      = $($proxyProc.Id)"
@@ -90,7 +93,9 @@ Start-Sleep -Seconds 2
 # Variables para Claude CLI
 $env:ANTHROPIC_API_URL = "http://127.0.0.1:$($env:PROXY_PORT)"
 $env:ANTHROPIC_BASE_URL = $env:ANTHROPIC_API_URL
-$env:ANTHROPIC_API_KEY = 'sk-ant-dummy-key-123'
+if (-not $env:ANTHROPIC_API_KEY) {
+  $env:ANTHROPIC_API_KEY = 'dummy'
+}
 $env:CLAUDE_CODE_SKIP_BOOTSTRAP = '0'
 $env:CLAUDE_CODE_OFFLINE_MODE = '1'
 $env:CLAUDE_CODE_DISABLE_RIPGREP = '1'
@@ -99,7 +104,7 @@ $env:CLAUDE_CODE_ASSUME_TTY = '1'
 Write-Host '[scripts] Lanzando el asistente (ventana aparte para TTY real)...'
 $bunCliPath = $bunPath.Replace("'", "''")
 $workspaceHostPathsEscaped = $workspaceHostPaths.Replace("'", "''")
-$trustedRootEscaped = $PSScriptRoot.Replace("'", "''")
+$trustedRootEscaped = $repoRoot.Replace("'", "''")
 $claudeConfigDirEscaped = $env:CLAUDE_CONFIG_DIR.Replace("'", "''")
 $homeDrive = [System.IO.Path]::GetPathRoot($env:CLAUDE_CONFIG_DIR).TrimEnd('\\')
 $homePath = $env:CLAUDE_CONFIG_DIR.Substring($homeDrive.Length)

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+coverage/
 
 # Runtime/session artifacts
 .claude_tmp/
@@ -8,3 +9,14 @@ proxy-output.log
 *.log
 *.tmp
 tempCodeRunnerFile.ps1
+workspace/logs/
+workspace/temp/
+
+# Local auth/secrets
+.env
+.env.local
+.env.*.local
+
+# Generated diagnostics
+src/tsc-errors.txt
+claudegpt-run.log

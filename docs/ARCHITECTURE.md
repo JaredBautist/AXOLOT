@@ -9,10 +9,10 @@ Reutilizar la experiencia CLI/TUI de Claude Code y desacoplarla del backend Anth
 ### 1) Launcher (`claudex.cmd`)
 
 - Wrapper minimo en CMD.
-- Delega toda la orquestacion a `run-claude-full.ps1`.
+- Delega toda la orquestacion a `scripts/run-claude-full.ps1`.
 - Permite ejecucion simple desde cualquier carpeta.
 
-### 2) Orquestador (`run-claude-full.ps1`)
+### 2) Orquestador (`scripts/run-claude-full.ps1`)
 
 Responsabilidades:
 
@@ -61,7 +61,7 @@ Responsabilidades:
 
 ## Riesgos actuales
 
-- `run-claude-full.ps1` fuerza cierre de procesos `bun`; puede afectar otras sesiones.
+- `scripts/run-claude-full.ps1` fuerza cierre de procesos `bun`; puede afectar otras sesiones.
 - Token upstream default en script; no recomendado para entornos compartidos.
 - Proxy tiene varias rutas fallback; conviene testear solo rutas soportadas por la version de OpenClaw objetivo.
 

@@ -55,17 +55,22 @@ Get-Process | Where-Object { $_.ProcessName -like '*bun*' -or $_.ProcessName -li
 - Ver logs:
 
 ```powershell
-Get-Content .\proxy-output.log -Tail 80
+Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
 ```
 
 ## Ciclo de release sugerido
 
 1. `bun run typecheck`
-2. Smoke test con `claudex`.
-3. Confirmar docs actualizadas.
-4. Commit con mensaje claro.
-5. Tag de version (opcional).
-6. Push a rama principal.
+2. `bun run build`
+3. `bun run smoke:scripts`
+4. Smoke test manual con `claudex`.
+5. Confirmar docs actualizadas.
+6. Commit con mensaje claro.
+7. Tag de version (opcional).
+8. Push a rama principal.
+
+Nota: `bun run typecheck:full` y `bun run build:full` quedan para auditorias
+del arbol completo heredado del upstream.
 
 ## Variables operativas recomendadas
 
@@ -79,7 +84,7 @@ No versionar:
 
 - `.claude_tmp/`
 - `.openclaw/`
-- `proxy-output.log`
+- `.claude_tmp/logs/proxy-output.log`
 - archivos temporales de editor
 
 ## Recuperacion rapida

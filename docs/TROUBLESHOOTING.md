@@ -11,7 +11,7 @@
 1. Ejecutar instalador:
 
 ```powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File .\install-claudex.ps1
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
 ```
 
 2. Cerrar y abrir terminal.
@@ -55,7 +55,7 @@ Get-Command openclaw
 
 ### Sintoma
 
-`proxy-output.log` muestra respuesta upstream con autorizacion fallida.
+`.claude_tmp/logs/proxy-output.log` muestra respuesta upstream con autorizacion fallida.
 
 ### Acciones
 
@@ -92,7 +92,7 @@ Interfaz visible, pero requests sin respuesta.
 ### Acciones
 
 1. Verificar que gateway escucha en `18789`.
-2. Revisar `proxy-output.log`.
+2. Revisar `.claude_tmp/logs/proxy-output.log`.
 3. Probar upstream manual con curl/httpie si aplica.
 4. Reintentar con arranque manual por etapas (ver `docs/OPERATIONS.md`).
 
@@ -115,5 +115,5 @@ Get-Command claudex
 Get-Command bun
 Get-Command openclaw
 netstat -ano | findstr 18789
-Get-Content .\proxy-output.log -Tail 80
+Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
 ```

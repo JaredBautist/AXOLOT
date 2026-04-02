@@ -20,7 +20,9 @@ set "UPSTREAM_MODEL=%UPSTREAM_MODEL%"
 if "%UPSTREAM_MODEL%"=="" set "UPSTREAM_MODEL=gpt-5.4"
 
 set "UPSTREAM_AUTH=%UPSTREAM_AUTH%"
-if "%UPSTREAM_AUTH%"=="" set "UPSTREAM_AUTH=4826b470842264d01279842f13bb7d4e31270b59ab3224dd"
+if "%UPSTREAM_AUTH%"=="" (
+  echo [claudegpt] WARNING: UPSTREAM_AUTH no definido. Si el gateway exige auth, configura la variable antes de ejecutar.
+)
 
 REM Start proxy in a minimized window
 start "" /min cmd /c "cd /d %ROOT% && set PROXY_PORT=%PROXY_PORT% && set UPSTREAM_URL=%UPSTREAM_URL% && set UPSTREAM_CHAT_PATH=%UPSTREAM_CHAT_PATH% && set UPSTREAM_MODEL=%UPSTREAM_MODEL% && set UPSTREAM_AUTH=%UPSTREAM_AUTH% && node tools\\claudegpt-proxy.cjs"

@@ -7,6 +7,7 @@ Claudex es un fork operativo del CLI de Claude Code para correr en modo local co
 - [Vision](#vision)
 - [Arquitectura](#arquitectura)
 - [Requisitos](#requisitos)
+- [Compatibilidad de modelos y cuentas](#compatibilidad-de-modelos-y-cuentas)
 - [Instalacion](#instalacion)
 - [Uso diario](#uso-diario)
 - [Configuracion](#configuracion)
@@ -15,7 +16,7 @@ Claudex es un fork operativo del CLI de Claude Code para correr en modo local co
 - [Flujo de desarrollo](#flujo-de-desarrollo)
 - [Troubleshooting](#troubleshooting)
 - [Seguridad y buenas practicas](#seguridad-y-buenas-practicas)
-- [Roadmap sugerido](#roadmap-sugerido)
+- [Plan para una herramienta lista](#plan-para-una-herramienta-lista)
 
 ## Vision
 
@@ -31,7 +32,7 @@ Resultado: un flujo de trabajo de programacion asistida desde terminal, local-fi
 ## Arquitectura
 
 ```text
-Usuario -> claudex.cmd -> run-claude-full.ps1
+Usuario -> claudex.cmd -> scripts/run-claude-full.ps1
                            |-> openclaw gateway run (puerto 18789)
                            |-> bun run src/tools/openclaw-proxy.ts (puerto libre, default 8787)
                            `-> bun run src/dev-entry.ts (TUI)
@@ -55,6 +56,19 @@ Documentacion tecnica extendida:
 - `openclaw` en PATH.
 - Node/Bun dependencies instaladas (`bun install`).
 - OpenClaw configurado y con acceso al modelo destino.
+- Para el flujo recomendado con Codex/OpenAI: cuenta de ChatGPT Plus o acceso API equivalente configurado en OpenClaw.
+
+## Compatibilidad de modelos y cuentas
+
+- Claudex queda abierto para cualquier modelo que OpenClaw pueda enrutar.
+- Hoy el setup base esta enfocado en `gpt-5.4`, pero no esta amarrado a un solo proveedor.
+- Puedes usar otros proveedores/modelos segun tu cuenta y configuracion en OpenClaw, por ejemplo:
+  - OpenAI/Codex
+  - Gemini
+  - Grok
+  - Kimi
+  - Ollama (local)
+- En la practica, el requisito real depende del backend que configures: cuenta del proveedor o modelo local.
 
 ## Instalacion
 
@@ -67,7 +81,7 @@ bun install
 2. Instalar launcher global `claudex`:
 
 ```powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File .\install-claudex.ps1
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
 ```
 
 Alternativa:
@@ -83,6 +97,8 @@ bun run install:claudex
 ```powershell
 Get-Command claudex
 ```
+
+5. (Opcional) definir variables en tu entorno usando `.env.example` como referencia, especialmente `UPSTREAM_AUTH` si tu gateway exige autenticacion.
 
 ## Uso diario
 
@@ -114,16 +130,20 @@ La resolucion de `bun` y `openclaw` se hace por PATH en runtime, con error expli
 ## Scripts principales
 
 - `claudex.cmd`: entrypoint corto.
-- `run-claude-full.ps1`: orquestador completo (gateway + proxy + TUI).
-- `install-claudex.ps1`: instalacion del comando global.
+- `scripts/run-claude-full.ps1`: orquestador completo (gateway + proxy + TUI).
+- `scripts/install-claudex.ps1`: instalacion del comando global.
 - `src/tools/openclaw-proxy.ts`: traductor Anthropic <-> OpenAI Chat Completions.
 
 NPM/Bun scripts:
 
 - `bun run dev`
 - `bun run build`
+- `bun run build:full`
 - `bun run start`
+- `bun run start:full`
 - `bun run typecheck`
+- `bun run typecheck:full`
+- `bun run smoke:scripts`
 - `bun run openclaw-proxy`
 - `bun run install:claudex`
 
@@ -132,8 +152,9 @@ NPM/Bun scripts:
 ```text
 .
 |-- claudex.cmd
-|-- run-claude-full.ps1
-|-- install-claudex.ps1
+|-- scripts/
+|   |-- run-claude-full.ps1
+|   `-- install-claudex.ps1
 |-- src/
 |   |-- dev-entry.ts
 |   `-- tools/openclaw-proxy.ts
@@ -141,6 +162,11 @@ NPM/Bun scripts:
 |   |-- ARCHITECTURE.md
 |   |-- OPERATIONS.md
 |   `-- TROUBLESHOOTING.md
+|-- workspace/
+|   |-- SOUL.md
+|   |-- USER.md
+|   |-- HEARTBEAT.md
+|   `-- TOOLS.md
 `-- README.md
 ```
 
@@ -153,6 +179,12 @@ NPM/Bun scripts:
 bun run typecheck
 ```
 
+Para validar el arbol completo heredado del upstream (puede fallar mientras se reduce deuda tecnica):
+
+```powershell
+bun run typecheck:full
+```
+
 3. Probar launcher:
 
 ```powershell
@@ -162,8 +194,16 @@ claudex
 4. Revisar logs:
 
 ```powershell
-Get-Content .\proxy-output.log -Tail 80
+Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
 ```
+
+## Validacion automatica
+
+Este repo incluye CI en GitHub Actions (`.github/workflows/ci.yml`) con:
+
+- `bun run typecheck`
+- `bun run build`
+- `bun run smoke:scripts`
 
 ## Troubleshooting
 
@@ -175,7 +215,7 @@ Casos comunes:
 - `openclaw` no encontrado -> instalar CLI de OpenClaw y validar PATH.
 - Puerto ocupado -> launcher selecciona puerto alternativo automaticamente.
 - Proxy responde 401/403 -> revisar `UPSTREAM_AUTH`.
-- TUI no abre -> ejecutar `run-claude-full.ps1` manualmente para ver errores directos.
+- TUI no abre -> ejecutar `scripts/run-claude-full.ps1` manualmente para ver errores directos.
 
 ## Seguridad y buenas practicas
 
@@ -184,11 +224,12 @@ Casos comunes:
 - No commitear logs de ejecucion.
 - Mantener `.gitignore` actualizado para artefactos locales.
 - Revisar permisos de herramientas externas antes de usar bypass total.
+- Revisar y respetar `LICENSE` antes de redistribuir el codigo.
 
-## Roadmap sugerido
+## Plan para una herramienta lista
 
-1. Parametrizar modelo por argumento CLI (`claudex --model gpt-5.4`).
-2. Agregar tests de contrato para el proxy.
-3. Agregar observabilidad estructurada (json logs).
-4. Publicar release reproducible con changelog.
-5. Agregar instalador cruzado para Linux/macOS.
+1. **Base estable (actual)**: launcher global, hardening de secretos, CI minima y estructura ordenada del repo.
+2. **Confiabilidad**: unificar proxies, eliminar kill global de procesos, mejorar manejo de errores/red.
+3. **Producto multi-modelo**: selector de backend/modelo por config/flags (`OpenAI`, `Gemini`, `Grok`, `Kimi`, `Ollama`).
+4. **Calidad operativa**: tests de contrato del proxy, smoke tests E2E y logs estructurados.
+5. **Release serio**: versionado, changelog, docs de despliegue y empaquetado multiplataforma.

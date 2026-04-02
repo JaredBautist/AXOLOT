@@ -1,15 +1,18 @@
 #!/usr/bin/env bun
-import { appendFileSync } from 'fs';
+import { appendFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 
 const PORT = parseInt(process.env.PROXY_PORT || '8787', 10);
 const UPSTREAM_BASE = (process.env.UPSTREAM_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:18789';
 const UPSTREAM_MODEL = process.env.UPSTREAM_MODEL || 'openclaw';
 const UPSTREAM_AUTH = process.env.UPSTREAM_AUTH || '';
+const LOG_FILE = process.env.CLAUDEX_PROXY_LOG || '.claude_tmp/logs/proxy-output.log';
 
 function logToFile(msg: string) {
+  mkdirSync(dirname(LOG_FILE), { recursive: true });
   const line = `[${new Date().toISOString()}] ${msg}
 `;
-  appendFileSync('proxy-output.log', line);
+  appendFileSync(LOG_FILE, line);
   console.log(msg);
 }
 
@@ -86,7 +89,11 @@ async function tryFetch(path: string, payload: any) {
     logToFile(`RESPUESTA RECIBIDA: Status=${response.status}`);
     if (!response.ok) {
       try {
-        const headersText = JSON.stringify(Object.fromEntries(response.headers.entries()));
+        const headersObj: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          headersObj[key] = value;
+        });
+        const headersText = JSON.stringify(headersObj);
         logToFile(`Headers de error: ${headersText}`);
       } catch (hErr) {
         logToFile("Could not log response headers.");

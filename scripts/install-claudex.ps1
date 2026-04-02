@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
-Set-Location $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
 
 function Get-NormalizedPath {
   param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -28,7 +29,7 @@ function Add-UserPathEntry {
   return $true
 }
 
-$repoRoot = Get-NormalizedPath -PathValue $PSScriptRoot
+$repoRoot = Get-NormalizedPath -PathValue $repoRoot
 $launcherPath = Join-Path $repoRoot 'claudex.cmd'
 if (-not (Test-Path -LiteralPath $launcherPath)) {
   throw "No se encontro claudex.cmd en $repoRoot"

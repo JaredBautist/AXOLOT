@@ -12,14 +12,15 @@ import { profileCheckpoint, profileReport } from './utils/startupProfiler.js';
 profileCheckpoint('main_tsx_entry');
 // Debug launcher output (set DEBUG_LAUNCH=1 to see argv/env quickly)
 if (process.env.DEBUG_LAUNCH) {
+  const redact = (value: string | undefined) => (value ? '[REDACTED]' : undefined);
   // biome-ignore lint/suspicious/noConsole:: intentional debug
   console.error(
     '[launch]',
     JSON.stringify({ argv: process.argv, cwd: process.cwd(), env: {
       ANTHROPIC_API_URL: process.env.ANTHROPIC_API_URL,
       ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-      UPSTREAM_AUTH: process.env.UPSTREAM_AUTH,
+      ANTHROPIC_API_KEY: redact(process.env.ANTHROPIC_API_KEY),
+      UPSTREAM_AUTH: redact(process.env.UPSTREAM_AUTH),
       CLAUDE_CODE_SIMPLE: process.env.CLAUDE_CODE_SIMPLE,
       CI: process.env.CI,
     } }, null, 2),

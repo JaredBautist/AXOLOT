@@ -1,15 +1,21 @@
 {
   "name": "claude-code",
   "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "bun run src/dev-entry.ts",
-    "build": "bun build src/main.tsx --outdir dist --target bun",
-    "start": "bun run dist/main.js",
-    "typecheck": "tsc --noEmit",
+    "build": "bun build src/tools/openclaw-proxy.ts --outdir dist --target bun",
+    "build:full": "bun build src/main.tsx --outdir dist --target bun",
+    "start": "bun run dist/openclaw-proxy.js",
+    "start:full": "bun run dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.claudex.json",
+    "typecheck:full": "tsc --noEmit -p tsconfig.json",
+    "smoke:scripts": "powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"[ScriptBlock]::Create((Get-Content -Raw './scripts/run-claude-full.ps1')) | Out-Null; [ScriptBlock]::Create((Get-Content -Raw './scripts/install-claudex.ps1')) | Out-Null; Write-Output 'OK'\"",
     "ollama": "bun run src/ollama-cli.ts",
     "openclaw-proxy": "bun run src/tools/openclaw-proxy.ts",
-    "install:claudex": "powershell -NoLogo -ExecutionPolicy Bypass -File .\\install-claudex.ps1"
+    "install:claudex": "powershell -NoLogo -ExecutionPolicy Bypass -File .\\scripts\\install-claudex.ps1"
   },
   "dependencies": {
     "@alcalzone/ansi-tokenize": "^0.3.0",
