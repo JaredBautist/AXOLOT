@@ -153,8 +153,11 @@ Variables importantes del launcher:
 - `UPSTREAM_URL`: endpoint del gateway OpenClaw.
 - `UPSTREAM_CHAT_PATH`: ruta de chat para upstreams personalizados.
 - `UPSTREAM_MODEL`: modelo enviado al upstream.
+- `UPSTREAM_PROVIDER`: proveedor para resolver `provider/model` cuando el modelo viene sin prefijo.
 - `UPSTREAM_AUTH`: token de autenticacion hacia upstream.
 - `UPSTREAM_AUTH_HEADER`: header para token (`authorization` por defecto, o `x-api-key`).
+- `OLLAMA_BASE_URL`: endpoint de salud para preflight de perfiles Ollama (`http://127.0.0.1:11434` por defecto).
+- `CLAUDEX_OLLAMA_DIRECT`: `1` por defecto. Los modelos `ollama/*` van directo a Ollama local, sin depender de OpenClaw para esa conexion.
 - `CLAUDEX_UPSTREAM_LOCAL_ONLY`: `1` por defecto para bloquear upstream remoto y evitar fuga accidental de token.
 - `CLAUDEX_MAX_BUDGET_USD`: presupuesto maximo por sesion (inyecta `--max-budget-usd` si no se pasa manualmente).
 - `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`/`.claudexrc.json`.
@@ -310,6 +313,7 @@ Casos comunes:
 - `openclaw` no encontrado -> instalar CLI de OpenClaw y validar PATH.
 - Puerto ocupado -> launcher selecciona puerto alternativo automaticamente.
 - Proxy responde 401/403 -> revisar `UPSTREAM_AUTH`.
+- `LLM request failed: network connection error.` con perfil Ollama -> verificar que Ollama este arriba (`ollama serve`) y que `OLLAMA_BASE_URL` responda.
 - Si ves `selected model ... may not exist` junto con varios `404` en proxy pero aparece al menos un `401 Unauthorized`, la causa real es auth de upstream faltante/incorrecta.
 - TUI no abre -> ejecutar `scripts/run-claude-full.ps1` manualmente para ver errores directos.
 

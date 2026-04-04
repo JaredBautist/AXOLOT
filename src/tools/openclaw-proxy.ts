@@ -4,7 +4,10 @@ import { dirname } from 'path';
 
 const PORT = parseInt(process.env.PROXY_PORT || '8787', 10);
 const UPSTREAM_BASE = (process.env.UPSTREAM_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:18789';
+const OLLAMA_BASE = (process.env.OLLAMA_BASE_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:11434';
+const OLLAMA_DIRECT = process.env.CLAUDEX_OLLAMA_DIRECT !== '0';
 const UPSTREAM_MODEL = process.env.UPSTREAM_MODEL || 'openclaw';
+const UPSTREAM_PROVIDER = (process.env.UPSTREAM_PROVIDER || '').trim().toLowerCase();
 const UPSTREAM_AUTH = process.env.UPSTREAM_AUTH || '';
 const UPSTREAM_AUTH_HEADER = (process.env.UPSTREAM_AUTH_HEADER || 'authorization').trim().toLowerCase();
 const UPSTREAM_CHAT_PATH = (process.env.UPSTREAM_CHAT_PATH || '').trim();
@@ -122,7 +125,30 @@ function buildAuthHeaderValue(token: string) {
   return UPSTREAM_AUTH_HEADER === 'authorization' ? `Bearer ${token}` : token;
 }
 
-function makeSseResponseFromOpenAI(json: any) {
+function isGenericGatewayModel(model: string) {
+  const normalized = model.trim().toLowerCase();
+  return normalized === '' || normalized === 'openclaw' || normalized === 'claude';
+}
+
+function resolveTargetModel(requestModel: string | undefined) {
+  const raw = (requestModel || '').trim();
+  if (isGenericGatewayModel(raw)) {
+    const envModel = (UPSTREAM_MODEL || '').trim();
+    if (isGenericGatewayModel(envModel)) return 'openclaw';
+    return resolveTargetModel(envModel);
+  }
+
+  if (raw.includes('/')) return raw;
+  if (UPSTREAM_PROVIDER) return `${UPSTREAM_PROVIDER}/${raw}`;
+  if (raw.includes(':')) return `ollama/${raw}`;
+  return raw;
+}
+
+function isOllamaModel(model: string) {
+  return model.trim().toLowerCase().startsWith('ollama/');
+}
+
+function makeSseResponseFromOpenAI(json: any, resolvedModel: string) {
   const choice = json?.choices?.[0] || {};
   const message = choice.message || {};
   const text = typeof message.content === 'string' ? message.content : '';
@@ -131,7 +157,7 @@ function makeSseResponseFromOpenAI(json: any) {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
 
-  chunks.push(encoder.encode(`event: message_start\ndata: {"type": "message_start", "message": {"id": "msg_${Date.now()}", "type": "message", "role": "assistant", "content": [], "model": "${UPSTREAM_MODEL}", "usage": ${JSON.stringify(usage)}}}\n\n`));
+  chunks.push(encoder.encode(`event: message_start\ndata: {"type": "message_start", "message": {"id": "msg_${Date.now()}", "type": "message", "role": "assistant", "content": [], "model": "${resolvedModel}", "usage": ${JSON.stringify(usage)}}}\n\n`));
   chunks.push(encoder.encode('event: content_block_start\ndata: {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}\n\n'));
 
   if (text) {
@@ -164,9 +190,16 @@ function makeSseResponseFromOpenAI(json: any) {
 }
 
 async function handleMessages(body: any) {
-  // El payload DEBE decir 'openclaw' como modelo para que el Gateway lo acepte
+  const requestModel = typeof body?.model === 'string' ? body.model : undefined;
+  const targetModel = resolveTargetModel(requestModel);
+  const directOllama = OLLAMA_DIRECT && isOllamaModel(targetModel);
+  const upstreamBase = directOllama ? OLLAMA_BASE : UPSTREAM_BASE;
+  const upstreamModel = directOllama
+    ? targetModel.replace(/^ollama\//i, '')
+    : 'openclaw';
+
   const payload: any = {
-    model: 'openclaw', 
+    model: upstreamModel,
     messages: toOpenAIMessages(body),
     stream: false,
   };
@@ -179,13 +212,15 @@ async function handleMessages(body: any) {
 
   if (payload.max_tokens > 4096) payload.max_tokens = 4096;
 
-  const paths = [
-    ...(UPSTREAM_CHAT_PATH ? [UPSTREAM_CHAT_PATH] : []),
-    '/v1/chat/completions',
-    '/openai/v1/chat/completions',
-    '/chat/completions',
-    '/'
-  ].filter((v, i, a) => a.indexOf(v) === i);
+  const paths = directOllama
+    ? ['/v1/chat/completions']
+    : [
+        ...(UPSTREAM_CHAT_PATH ? [UPSTREAM_CHAT_PATH] : []),
+        '/v1/chat/completions',
+        '/openai/v1/chat/completions',
+        '/chat/completions',
+        '/',
+      ].filter((v, i, a) => a.indexOf(v) === i);
 
   const activeAuth = UPSTREAM_AUTH || '4826b470842264d01279842f13bb7d4e31270b59ab3224dd';
   
@@ -193,22 +228,27 @@ async function handleMessages(body: any) {
   let statusCode = 502;
 
   for (const path of paths) {
-    const targetUrl = `${UPSTREAM_BASE}${path}`;
+    const targetUrl = `${upstreamBase}${path}`;
     
-    const authSchemes = [
-      { [UPSTREAM_AUTH_HEADER]: buildAuthHeaderValue(activeAuth) },
-      { 'x-api-key': activeAuth }
-    ];
+    const authSchemes = directOllama
+      ? [{}]
+      : [
+          { [UPSTREAM_AUTH_HEADER]: buildAuthHeaderValue(activeAuth) },
+          { 'x-api-key': activeAuth },
+        ];
 
     for (const authHeader of authSchemes) {
-      logToFile(`Trying: ${targetUrl} with auth ${JSON.stringify(Object.keys(authHeader))}`);
+      logToFile(`Trying: ${targetUrl} with auth ${JSON.stringify(Object.keys(authHeader))} model=${upstreamModel} directOllama=${directOllama}`);
       try {
         const bodyStr = JSON.stringify(payload);
+        const safeAuthHeaders = Object.fromEntries(
+          Object.entries(authHeader).filter(([, value]) => typeof value === 'string')
+        ) as Record<string, string>;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...authHeader
+            ...safeAuthHeaders
           },
           body: bodyStr
         });
@@ -216,7 +256,7 @@ async function handleMessages(body: any) {
         logToFile(`Status: ${resp.status}`);
         if (resp.ok) {
           const json = await resp.json();
-          return makeSseResponseFromOpenAI(json);
+          return makeSseResponseFromOpenAI(json, targetModel);
         }
         
         const errText = await resp.text();

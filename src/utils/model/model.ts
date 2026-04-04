@@ -277,8 +277,15 @@ export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
  * @returns The short name (e.g., 'claude-3-5-haiku') if found, or the original name if no mapping exists
  */
 export function getCanonicalName(fullModelName: ModelName): ModelShortName {
-  if (fullModelName.includes('openai-codex') || fullModelName.includes('gpt-5.4')) {
-    return 'openai-codex/gpt-5.4' as ModelShortName
+  const lowered = fullModelName.toLowerCase()
+  if (
+    lowered.startsWith('openai/') ||
+    lowered.startsWith('openai-codex/') ||
+    lowered.startsWith('ollama/') ||
+    lowered.startsWith('gpt-') ||
+    /^o\d/.test(lowered)
+  ) {
+    return lowered as ModelShortName
   }
   // Resolve overridden model IDs (e.g. Bedrock ARNs) back to canonical names.
   // resolved is always a 1P-format ID, so firstPartyNameToCanonical can handle it.
@@ -355,6 +362,14 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
       return 'codex-5.4 OpenIA Api'
     case 'openai-codex/gpt-5.4':
       return 'codex-5.4 OpenIA Api'
+    case 'ollama/qwen2.5-coder:3b':
+      return 'Qwen 2.5 Coder 3B (Ollama)'
+    case 'ollama/gemma3:1b':
+      return 'Gemma 3 1B (Ollama)'
+    case 'qwen3b':
+      return 'Qwen 2.5 Coder 3B (Ollama)'
+    case 'gemma1b':
+      return 'Gemma 3 1B (Ollama)'
     case getModelStrings().opus46:
       return 'Opus 4.6'
     case getModelStrings().opus46 + '[1m]':
@@ -455,14 +470,25 @@ export function parseUserSpecifiedModel(
   const modelInputTrimmed = modelInput.trim()
   const normalizedModel = modelInputTrimmed.toLowerCase()
 
-  if (normalizedModel.includes('openai-codex') || normalizedModel.includes('gpt-5.4')) {
-    return 'openai-codex/gpt-5.4' as ModelName
+  if (
+    normalizedModel.startsWith('openai/') ||
+    normalizedModel.startsWith('openai-codex/') ||
+    normalizedModel.startsWith('ollama/') ||
+    normalizedModel.startsWith('gpt-') ||
+    /^o\d/.test(normalizedModel)
+  ) {
+    return modelInputTrimmed
   }
 
   const has1mTag = has1mContext(normalizedModel)
   const modelString = has1mTag
     ? normalizedModel.replace(/\[1m]$/i, '').trim()
     : normalizedModel
+
+  // Compat legacy: "openclaw" se comporta como Codex 5.4 en OpenAI.
+  if (modelString === 'openclaw') {
+    return 'openai-codex/gpt-5.4' + (has1mTag ? '[1m]' : '')
+  }
 
   if (isModelAlias(modelString)) {
     switch (modelString) {

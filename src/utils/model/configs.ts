@@ -97,6 +97,20 @@ export const OPENCLAW_MODEL_CONFIG = {
   foundry: 'openai-codex/gpt-5.4',
 } as const satisfies ModelConfig
 
+export const OLLAMA_QWEN_3B_CONFIG = {
+  firstParty: 'ollama/qwen2.5-coder:3b',
+  bedrock: 'ollama/qwen2.5-coder:3b',
+  vertex: 'ollama/qwen2.5-coder:3b',
+  foundry: 'ollama/qwen2.5-coder:3b',
+} as const satisfies ModelConfig
+
+export const OLLAMA_GEMMA_1B_CONFIG = {
+  firstParty: 'ollama/gemma3:1b',
+  bedrock: 'ollama/gemma3:1b',
+  vertex: 'ollama/gemma3:1b',
+  foundry: 'ollama/gemma3:1b',
+} as const satisfies ModelConfig
+
 // @[MODEL LAUNCH]: Register the new config here.
 export const ALL_MODEL_CONFIGS = {
   haiku35: CLAUDE_3_5_HAIKU_CONFIG,
@@ -108,6 +122,10 @@ export const ALL_MODEL_CONFIGS = {
   sonnet46: CLAUDE_SONNET_4_6_CONFIG,
   codex54: OPENAI_CODEX_5_4_CONFIG,
   openclaw: OPENCLAW_MODEL_CONFIG,
+  'ollama/qwen2.5-coder:3b': OLLAMA_QWEN_3B_CONFIG,
+  'ollama/gemma3:1b': OLLAMA_GEMMA_1B_CONFIG,
+  qwen3b: OLLAMA_QWEN_3B_CONFIG,
+  gemma1b: OLLAMA_GEMMA_1B_CONFIG,
   opus40: CLAUDE_OPUS_4_CONFIG,
   opus41: CLAUDE_OPUS_4_1_CONFIG,
   opus45: CLAUDE_OPUS_4_5_CONFIG,

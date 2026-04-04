@@ -86,7 +86,12 @@ function Load-ClaudexConfig {
   if (-not (Has-Value $raw)) { return $null }
 
   try {
-    return $raw | ConvertFrom-Json -Depth 20
+    # PowerShell 7+ soporta -Depth en ConvertFrom-Json; Windows PowerShell 5.1 no.
+    try {
+      return $raw | ConvertFrom-Json -Depth 20
+    } catch {
+      return $raw | ConvertFrom-Json
+    }
   } catch {
     throw "[scripts] No se pudo parsear config '$ConfigPath'. Usa JSON valido."
   }
@@ -197,6 +202,34 @@ function Get-LocalGatewayPort {
   return $uri.Port
 }
 
+function Get-ProviderFromProfileName {
+  param([string]$ProfileName)
+
+  if (-not (Has-Value $ProfileName)) { return $null }
+
+  $normalized = "$ProfileName".Trim().ToLowerInvariant()
+  if ($normalized.StartsWith('openai')) { return 'openai-codex' }
+  if ($normalized.StartsWith('ollama')) { return 'ollama' }
+  if ($normalized.StartsWith('gemini')) { return 'gemini' }
+  if ($normalized.StartsWith('grok')) { return 'grok' }
+  if ($normalized.StartsWith('kimi')) { return 'kimi' }
+  return $null
+}
+
+function Test-OllamaReachable {
+  param([string]$BaseUrl)
+
+  if (-not (Has-Value $BaseUrl)) { return $false }
+
+  $healthUrl = "$($BaseUrl.TrimEnd('/'))/api/tags"
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -Method GET -TimeoutSec 6
+    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 300
+  } catch {
+    return $false
+  }
+}
+
 $configPath = Resolve-ClaudexConfigPath -LaunchDir $launchDir -RepoRoot $repoRoot -ConfigHint $env:CLAUDEX_CONFIG
 $claudexConfig = Load-ClaudexConfig -ConfigPath $configPath
 if (Has-Value $configPath) {
@@ -222,6 +255,8 @@ if (Has-Value $profileName -and $null -ne $profiles) {
 
 $upstreamUrl = Resolve-ConfigSetting -EnvName 'UPSTREAM_URL' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('upstreamUrl', 'upstream_url', 'url') -DefaultValue 'http://127.0.0.1:18789'
 $upstreamModel = Resolve-ConfigSetting -EnvName 'UPSTREAM_MODEL' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('model', 'upstreamModel', 'upstream_model') -DefaultValue 'openclaw'
+$providerDefault = Get-ProviderFromProfileName -ProfileName $profileName
+$upstreamProvider = Resolve-ConfigSetting -EnvName 'UPSTREAM_PROVIDER' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('provider', 'upstreamProvider', 'upstream_provider') -DefaultValue $providerDefault
 $upstreamChatPath = Resolve-ConfigSetting -EnvName 'UPSTREAM_CHAT_PATH' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('chatPath', 'upstreamChatPath', 'upstream_chat_path') -DefaultValue ''
 $upstreamAuthHeader = Resolve-ConfigSetting -EnvName 'UPSTREAM_AUTH_HEADER' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('authHeader', 'upstreamAuthHeader', 'upstream_auth_header') -DefaultValue 'authorization'
 $upstreamAuth = Resolve-ConfigSetting -EnvName 'UPSTREAM_AUTH' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('auth', 'upstreamAuth', 'upstream_auth', 'token', 'key') -DefaultValue '4826b470842264d01279842f13bb7d4e31270b59ab3224dd'
@@ -229,11 +264,16 @@ $localOnlyRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_UPSTREAM_LOCAL_ONLY' -Pr
 $maxBudgetRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_MAX_BUDGET_USD' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('maxBudgetUsd', 'max_budget_usd') -DefaultValue $null
 $proxyPortRaw = Resolve-ConfigSetting -EnvName 'PROXY_PORT' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('proxyPort', 'proxy_port') -DefaultValue $null
 $skillsPackRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_SKILLS_PACK' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('skillsPack', 'skills_pack') -DefaultValue 'token-lean'
+$ollamaBaseUrlRaw = Resolve-ConfigSetting -EnvName 'OLLAMA_BASE_URL' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('ollamaBaseUrl', 'ollama_base_url') -DefaultValue 'http://127.0.0.1:11434'
+$ollamaDirectRaw = Resolve-ConfigSetting -EnvName 'CLAUDEX_OLLAMA_DIRECT' -ProfileConfig $profileConfig -RootConfig $claudexConfig -Keys @('ollamaDirect', 'claudexOllamaDirect', 'claudex_ollama_direct') -DefaultValue '1'
 
 $env:UPSTREAM_URL = "$upstreamUrl"
 $env:UPSTREAM_MODEL = "$upstreamModel"
+$env:UPSTREAM_PROVIDER = "$upstreamProvider"
 $env:ANTHROPIC_MODEL = "$upstreamModel"
 $env:UPSTREAM_AUTH_HEADER = "$upstreamAuthHeader"
+$env:OLLAMA_BASE_URL = "$ollamaBaseUrlRaw"
+$env:CLAUDEX_OLLAMA_DIRECT = (To-FlagString -Value $ollamaDirectRaw -DefaultValue '1')
 if ($null -ne $upstreamAuth) {
   $env:UPSTREAM_AUTH = "$upstreamAuth"
 }
@@ -244,6 +284,15 @@ if (Has-Value $upstreamChatPath) {
 }
 if (-not (Has-Value [Environment]::GetEnvironmentVariable('CLAUDEX_MAX_BUDGET_USD')) -and (Has-Value $maxBudgetRaw)) {
   $env:CLAUDEX_MAX_BUDGET_USD = "$maxBudgetRaw"
+}
+
+$effectiveProvider = "$($env:UPSTREAM_PROVIDER)".Trim().ToLowerInvariant()
+$effectiveModel = "$($env:UPSTREAM_MODEL)".Trim().ToLowerInvariant()
+if ($effectiveProvider -eq 'ollama' -or $effectiveModel.StartsWith('ollama/')) {
+  $ollamaBaseUrl = [Environment]::GetEnvironmentVariable('OLLAMA_BASE_URL')
+  if (-not (Test-OllamaReachable -BaseUrl $ollamaBaseUrl)) {
+    throw "[scripts] Perfil Ollama seleccionado pero no hay conexion con $ollamaBaseUrl. Inicia Ollama (`ollama serve`) o cambia a CLAUDEX_PROFILE=openai."
+  }
 }
 
 $desiredPorts = @(8787, 8788, 8878, 18887)
@@ -329,6 +378,8 @@ Write-Host '[scripts] Iniciando Proxy con entorno configurado...'
 Write-Host "         PROXY_PORT     = $($env:PROXY_PORT)"
 Write-Host "         UPSTREAM_URL   = $($env:UPSTREAM_URL)"
 Write-Host "         UPSTREAM_MODEL = $($env:UPSTREAM_MODEL)"
+Write-Host "         UPSTREAM_PROV  = $($env:UPSTREAM_PROVIDER)"
+Write-Host "         OLLAMA_DIRECT  = $($env:CLAUDEX_OLLAMA_DIRECT)"
 Write-Host "         AUTH_HEADER    = $($env:UPSTREAM_AUTH_HEADER)"
 Write-Host "         LOCAL_ONLY     = $($env:CLAUDEX_UPSTREAM_LOCAL_ONLY)"
 if (Has-Value $selectedSkillsPackDir) {
@@ -407,8 +458,9 @@ $cliCmd = @"
 `$env:ANTHROPIC_API_URL='$($env:ANTHROPIC_API_URL)';
 `$env:ANTHROPIC_BASE_URL='$($env:ANTHROPIC_BASE_URL)';
 `$env:ANTHROPIC_API_KEY='$($env:ANTHROPIC_API_KEY)';
-`$env:UPSTREAM_MODEL='openclaw';
-`$env:ANTHROPIC_MODEL='openclaw';
+`$env:UPSTREAM_MODEL='$($env:UPSTREAM_MODEL)';
+`$env:UPSTREAM_PROVIDER='$($env:UPSTREAM_PROVIDER)';
+`$env:ANTHROPIC_MODEL='$($env:UPSTREAM_MODEL)';
 `$env:CLAUDE_CODE_SKIP_BOOTSTRAP='0';
 `$env:CLAUDE_CODE_OFFLINE_MODE='1';
 `$env:CLAUDE_CODE_DISABLE_RIPGREP='1';

@@ -372,6 +372,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
   } else {
     payg3pOptions.push(getHaikuOption())
   }
+
   return payg3pOptions
 }
 
@@ -460,6 +461,41 @@ function getKnownModelOption(model: string): ModelOption | null {
 
 export function getModelOptions(fastMode = false): ModelOption[] {
   const options = getModelOptionsBase(fastMode)
+
+  // Agregamos siempre los modelos locales al selector
+  const localOptions: ModelOption[] = [
+    {
+      value: 'openai-codex/gpt-5.4',
+      label: 'Codex 5.4 (OpenClaw)',
+      description: 'Usa OpenAI Codex via OpenClaw Gateway'
+    },
+    {
+      value: 'openai-codex/gpt-5.4',
+      label: 'GPT-5.4 (OpenAI Codex)',
+      description: 'Ruta directa por proveedor OpenAI Codex'
+    },
+    {
+      value: 'openai-codex/gpt-5.4-mini',
+      label: 'GPT-5.4 Mini (OpenAI Codex)',
+      description: 'Variante mas economica/rapida para iteraciones'
+    },
+    {
+      value: 'ollama/qwen2.5-coder:3b',
+      label: 'Qwen 2.5 Coder 3B (Ollama)',
+      description: 'Modelo local optimizado para código'
+    },
+    {
+      value: 'ollama/gemma3:1b',
+      label: 'Gemma 3 1B (Ollama)',
+      description: 'Modelo local ultrarrápido de Google'
+    }
+  ];
+
+  for (const opt of localOptions) {
+    if (!options.some(existing => existing.value === opt.value)) {
+      options.push(opt);
+    }
+  }
 
   // Add the custom model from the ANTHROPIC_CUSTOM_MODEL_OPTION env var
   const envCustomModel = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION

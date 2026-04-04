@@ -4,6 +4,7 @@
     "openai": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "gpt-5.4",
+      "provider": "openai-codex",
       "authHeader": "authorization",
       "localOnly": true,
       "maxBudgetUsd": 2,
@@ -12,6 +13,7 @@
     "openai-pro": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "gpt-5.4",
+      "provider": "openai-codex",
       "authHeader": "authorization",
       "localOnly": true,
       "maxBudgetUsd": 2,
@@ -20,6 +22,7 @@
     "gemini": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "gemini-2.5-pro",
+      "provider": "gemini",
       "authHeader": "authorization",
       "localOnly": true,
       "skillsPack": "token-lean"
@@ -27,6 +30,7 @@
     "grok": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "grok-3",
+      "provider": "grok",
       "authHeader": "authorization",
       "localOnly": true,
       "skillsPack": "token-lean"
@@ -34,6 +38,7 @@
     "kimi": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "kimi-k2-instruct",
+      "provider": "kimi",
       "authHeader": "authorization",
       "localOnly": true,
       "skillsPack": "token-lean"
@@ -41,6 +46,9 @@
     "ollama": {
       "upstreamUrl": "http://127.0.0.1:18789",
       "model": "qwen2.5-coder:7b",
+      "provider": "ollama",
+      "ollamaBaseUrl": "http://127.0.0.1:11434",
+      "ollamaDirect": true,
       "authHeader": "authorization",
       "localOnly": true,
       "skillsPack": "token-lean"

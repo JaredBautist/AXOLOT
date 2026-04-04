@@ -98,8 +98,16 @@ function familyHasSpecificEntries(
  * 3. Full model IDs ("claude-opus-4-5-20251101") — exact match only
  */
 export function isModelAllowed(model: string): boolean {
-  // Siempre permitimos el modelo de Codex si estamos en modo local con OpenClaw
-  if (model.includes('openai-codex') || model.includes('gpt-5.4')) {
+  // En este fork permitimos passthrough de modelos OpenAI/Ollama locales.
+  const normalized = model.trim().toLowerCase()
+  if (
+    normalized === 'openclaw' ||
+    normalized.startsWith('openai/') ||
+    normalized.startsWith('openai-codex/') ||
+    normalized.startsWith('ollama/') ||
+    normalized.startsWith('gpt-') ||
+    /^o\d/.test(normalized)
+  ) {
     return true
   }
 
