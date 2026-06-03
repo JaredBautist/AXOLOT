@@ -222,7 +222,7 @@ async function handleMessages(body: any) {
         '/',
       ].filter((v, i, a) => a.indexOf(v) === i);
 
-  const activeAuth = UPSTREAM_AUTH || '4826b470842264d01279842f13bb7d4e31270b59ab3224dd';
+  const activeAuth = UPSTREAM_AUTH;
   
   let lastError = 'upstream unavailable';
   let statusCode = 502;

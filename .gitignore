@@ -1,22 +1,69 @@
+# Dependencies
 node_modules/
-dist/
-coverage/
+.pnp/
+.pnp.*
 
-# Runtime/session artifacts
-.claude_tmp/
-.openclaw/
-proxy-output.log
+# Build and package outputs
+dist/
+build/
+out/
+coverage/
+*.tgz
+*.tar.gz
+*.zip
 *.log
 *.tmp
+*.cache
 tempCodeRunnerFile.ps1
-workspace/logs/
-workspace/temp/
 
-# Local auth/secrets
-.env
-.env.local
-.env.*.local
-
-# Generated diagnostics
-src/tsc-errors.txt
+# Local runtime/session state
+.claude/
+.claude_tmp/
+.openclaw/
+.codex/
+.gemini/
+.aider*
+workspace/
+proxy-output.log
 claudegpt-run.log
+src/tsc-errors.txt
+
+# Claudex local user config and auth
+.claudexrc
+.claudexrc.json
+direct-providers.json
+claude-runtime/
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+.npmrc
+.yarnrc
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials.json
+credentials*.json
+secrets.json
+secrets*.json
+token.json
+tokens.json
+*token*.local*
+*secret*.local*
+
+# Local notes/memory that may contain private context
+memory/
+!memory/.gitkeep
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

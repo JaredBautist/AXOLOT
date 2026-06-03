@@ -14,6 +14,14 @@ export function useMainLoopModel(): ModelName {
   const mainLoopModel = useAppState(s => s.mainLoopModel)
   const mainLoopModelForSession = useAppState(s => s.mainLoopModelForSession)
 
+  if (
+    process.env.CLAUDEX_OPENCLAW_MODE === '1' &&
+    !mainLoopModelForSession &&
+    (!mainLoopModel || mainLoopModel === 'openclaw')
+  ) {
+    return 'openclaw'
+  }
+
   // parseUserSpecifiedModel reads tengu_ant_model_override via
   // _CACHED_MAY_BE_STALE (in resolveAntModel). Until GB init completes,
   // that's the stale disk cache; after, it's the in-memory remoteEval map.

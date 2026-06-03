@@ -100,6 +100,10 @@ import {
   extractQuotaStatusFromHeaders,
 } from '../claudeAiLimits.js'
 import { getAPIContextManagement } from '../compact/apiMicrocompact.js'
+import {
+  getNativeProviderRoute,
+  queryNativeProvider,
+} from './nativeProvider.js'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
@@ -767,6 +771,16 @@ export async function* queryModelWithStreaming({
   StreamEvent | AssistantMessage | SystemAPIErrorMessage,
   void
 > {
+  if (getNativeProviderRoute(options.model)) {
+    yield* queryNativeProvider({
+      messages,
+      systemPrompt,
+      signal,
+      model: options.model,
+    })
+    return
+  }
+
   return yield* withStreamingVCR(messages, async function* () {
     yield* queryModel(
       messages,

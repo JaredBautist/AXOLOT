@@ -358,10 +358,28 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
   switch (model) {
+    case 'openai/gpt-5.5':
+      return 'GPT 5.5 · OpenAI'
+    case 'openai/gpt-5.5-pro':
+      return 'GPT 5.5 Pro · OpenAI'
+    case 'openai/gpt-5.4':
+      return 'GPT 5.4 · OpenAI'
+    case 'openai/gpt-5.4-mini':
+      return 'GPT 5.4 Mini · OpenAI'
+    case 'openai/gpt-5.4-pro':
+      return 'GPT 5.4 Pro · OpenAI'
+    case 'openai-codex/gpt-5.5':
+      return 'GPT 5.5 · OpenAI Codex'
+    case 'openai-codex/gpt-5.5-pro':
+      return 'GPT 5.5 Pro · OpenAI Codex'
     case 'openclaw':
-      return 'codex-5.4 OpenIA Api'
+      return 'Select your AI provider'
     case 'openai-codex/gpt-5.4':
-      return 'codex-5.4 OpenIA Api'
+      return 'GPT 5.4 · OpenAI Codex'
+    case 'openai-codex/gpt-5.4-mini':
+      return 'GPT 5.4 Mini · OpenAI Codex'
+    case 'openai-codex/gpt-5.4-pro':
+      return 'GPT 5.4 Pro · OpenAI Codex'
     case 'ollama/qwen2.5-coder:3b':
       return 'Qwen 2.5 Coder 3B (Ollama)'
     case 'ollama/gemma3:1b':

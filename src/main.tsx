@@ -602,13 +602,8 @@ const _pendingSSH: PendingSSH | undefined = feature('SSH_REMOTE') ? {
 export async function main() {
   profileCheckpoint('main_function_start');
 
-  // Early diagnostics for blocking startup
-  console.error('[DEBUG] main entry reached');
-
   // FAST PATH: Si detectamos el proxy, saltamos directo al chat
   if (process.env.ANTHROPIC_BASE_URL?.includes('127.0.0.1')) {
-    console.error('[DEBUG] Proxy detectado, forzando arranque del chat MINIMAL...');
-    
     // Seteamos el estado interactivo
     setIsInteractive(true);
     
@@ -618,7 +613,7 @@ export async function main() {
     
     // Cargamos el REPL, el proveedor de estado y Ink
     const { REPL } = await import('./screens/REPL.js');
-    const { AppStateProvider } = await import('./state/AppState.js');
+    const { AppStateProvider, getDefaultAppState } = await import('./state/AppState.js');
     const { render } = await import('./ink.js');
     
     // Desactivamos el auto-updater para evitar el error de cancelSignal
@@ -630,11 +625,16 @@ export async function main() {
     const tools = await getTools();
     const commands = await getCommands(process.cwd());
     const { ALL_MODEL_CONFIGS } = await import('./utils/model/configs.js');
-    const mainLoopModel = process.env.UPSTREAM_MODEL || process.env.ANTHROPIC_MODEL || ALL_MODEL_CONFIGS.sonnet46.firstParty;
+    const mainLoopModel = process.env.CLAUDEX_OPENCLAW_MODE === '1'
+      ? 'openclaw'
+      : process.env.UPSTREAM_MODEL || process.env.ANTHROPIC_MODEL || ALL_MODEL_CONFIGS.sonnet46.firstParty;
     
     // Lanzamos el chat con motor real y comandos
     const instance = render(
-      <AppStateProvider>
+      <AppStateProvider initialState={{
+        ...getDefaultAppState(),
+        mainLoopModel,
+      }}>
         <REPL 
           unmount={() => { instance.unmount(); process.exit(0); }}
           permissionMode="bypassPermissions"
@@ -644,7 +644,6 @@ export async function main() {
           initialMessages={[]}
           devChannels={[]}
           thinkingConfig={{ type: 'disabled' }}
-          mainLoopModel={mainLoopModel}
         />
       </AppStateProvider>
     );
@@ -1048,7 +1047,7 @@ async function run(): Promise<CommanderCommand> {
     }
     profileCheckpoint('preAction_after_settings_sync');
   });
-  program.name('claude').description(`Claude Code - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
+  program.name('claudex').description(`Claudex v1.0.0 - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
   // Subcommands inherit helpOption via commander's copyInheritedSettings —
   // setting it once here covers mcp, plugin, auth, and all other subcommands.
   .helpOption('-h, --help', 'Display help for command').option('-d, --debug [filter]', 'Enable debug mode with optional category filtering (e.g., "api,hooks" or "!1p,!file")', (_value: string | true) => {
@@ -3894,7 +3893,7 @@ async function run(): Promise<CommanderCommand> {
         pendingHookMessages
       }, renderAndRun);
     }
-  }).version(`${MACRO.VERSION} (Claude Code)`, '-v, --version', 'Output the version number');
+  }).version('Claudex v1.0.0', '-v, --version', 'Output the version number');
 
   // Worktree flags
   program.option('-w, --worktree [name]', 'Create a new git worktree for this session (optionally specify a name)');

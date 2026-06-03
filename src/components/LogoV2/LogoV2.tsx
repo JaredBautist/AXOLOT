@@ -7,7 +7,7 @@ import { stringWidth } from '../../ink/stringWidth.js';
 import { getLayoutMode, calculateLayoutDimensions, calculateOptimalLeftWidth, formatWelcomeMessage, truncatePath, getRecentActivitySync, getRecentReleaseNotesSync, getLogoDisplayData } from '../../utils/logoV2Utils.js';
 import { truncate } from '../../utils/format.js';
 import { getDisplayPath } from '../../utils/file.js';
-import { Clawd } from './Clawd.js';
+import { ClaudexASCIILogo } from '../ClaudexASCIILogo.js';
 import { FeedColumn } from './FeedColumn.js';
 import { createRecentActivityFeed, createWhatsNewFeed, createProjectOnboardingFeed, createGuestPassesFeed } from './feedConfigs.js';
 import { getGlobalConfig, saveGlobalConfig } from 'src/utils/config.js';
@@ -161,9 +161,10 @@ export function LogoV2() {
   const {
     version,
     cwd,
-    billingType,
+    billingType: rawBillingType,
     agentName: agentNameFromSettings
   } = getLogoDisplayData();
+  const billingType = process.env.CLAUDEX_OPENCLAW_MODE === '1' ? 'OpenClaw' : rawBillingType;
   const agentName = agent ?? agentNameFromSettings;
   const effortSuffix = getEffortSuffix(model, effortValue);
   const t9 = fullModelDisplayName + effortSuffix;
@@ -248,8 +249,8 @@ export function LogoV2() {
   }
   const layoutMode = getLayoutMode(columns);
   const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-  const borderTitle = ` ${color("claude", userTheme)("Claude Code")} ${color("inactive", userTheme)(`v${version}`)} `;
-  const compactBorderTitle = color("claude", userTheme)(" Claude Code ");
+  const borderTitle = ` ${color("claude", userTheme)("Claudex")} ${color("inactive", userTheme)("v1.0.0")} `;
+  const compactBorderTitle = color("claude", userTheme)(" Claudex ");
   if (layoutMode === "compact") {
     let welcomeMessage = formatWelcomeMessage(username);
     if (stringWidth(welcomeMessage) > columns - 4) {
@@ -279,7 +280,7 @@ export function LogoV2() {
     }
     let t12;
     if ($[34] === Symbol.for("react.memo_cache_sentinel")) {
-      t12 = <Box marginY={1}><Clawd /></Box>;
+      t12 = <Text> </Text>;
       $[34] = t12;
     } else {
       t12 = $[34];
@@ -370,7 +371,7 @@ export function LogoV2() {
   }
   let t19;
   if ($[48] === Symbol.for("react.memo_cache_sentinel")) {
-    t19 = <Clawd />;
+    t19 = <ClaudexASCIILogo />;
     $[48] = t19;
   } else {
     t19 = $[48];
@@ -401,9 +402,9 @@ export function LogoV2() {
     t22 = $[55];
   }
   let t23;
-  if ($[56] !== leftWidth || $[57] !== t18 || $[58] !== t22) {
-    t23 = <Box flexDirection="column" width={leftWidth} justifyContent="space-between" alignItems="center" minHeight={9}>{t18}{t19}{t22}</Box>;
-    $[56] = leftWidth;
+  if ($[56] !== t19 || $[57] !== t18 || $[58] !== t22) {
+    t23 = <Box flexDirection="row" gap={2} alignItems="flex-start">{t19}<Box flexDirection="column" gap={1} paddingTop={1}>{t18}{t22}</Box></Box>;
+    $[56] = t19;
     $[57] = t18;
     $[58] = t22;
     $[59] = t23;
