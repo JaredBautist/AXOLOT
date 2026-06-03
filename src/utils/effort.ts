@@ -68,6 +68,14 @@ export function isEffortLevel(value: string): value is EffortLevel {
   return (EFFORT_LEVELS as readonly string[]).includes(value)
 }
 
+export function normalizeEffortLevelInput(value: string): EffortLevel | 'auto' {
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'normal') return 'medium'
+  if (normalized === 'hight') return 'high'
+  if (normalized === 'auto' || normalized === 'unset') return 'auto'
+  return normalized as EffortLevel
+}
+
 export function parseEffortValue(value: unknown): EffortValue | undefined {
   if (value === undefined || value === null || value === '') {
     return undefined
@@ -75,7 +83,10 @@ export function parseEffortValue(value: unknown): EffortValue | undefined {
   if (typeof value === 'number' && isValidNumericEffort(value)) {
     return value
   }
-  const str = String(value).toLowerCase()
+  const str = normalizeEffortLevelInput(String(value))
+  if (str === 'auto') {
+    return undefined
+  }
   if (isEffortLevel(str)) {
     return str
   }
@@ -107,7 +118,7 @@ export function toPersistableEffort(
 export function getInitialEffortSetting(): EffortLevel | undefined {
   // toPersistableEffort filters 'max' for non-ants on read, so a manually
   // edited settings.json doesn't leak session-scoped max into a fresh session.
-  return toPersistableEffort(getInitialSettings().effortLevel)
+  return toPersistableEffort(getInitialSettings().effortLevel) ?? 'medium'
 }
 
 /**
@@ -135,10 +146,11 @@ export function resolvePickerEffortPersistence(
 
 export function getEffortEnvOverride(): EffortValue | null | undefined {
   const envOverride = process.env.CLAUDE_CODE_EFFORT_LEVEL
-  return envOverride?.toLowerCase() === 'unset' ||
-    envOverride?.toLowerCase() === 'auto'
+  const normalized =
+    envOverride === undefined ? undefined : normalizeEffortLevelInput(envOverride)
+  return normalized === 'auto'
     ? null
-    : parseEffortValue(envOverride)
+    : parseEffortValue(normalized)
 }
 
 /**

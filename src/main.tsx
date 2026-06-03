@@ -628,12 +628,16 @@ export async function main() {
     const mainLoopModel = process.env.CLAUDEX_OPENCLAW_MODE === '1'
       ? 'openclaw'
       : process.env.UPSTREAM_MODEL || process.env.ANTHROPIC_MODEL || ALL_MODEL_CONFIGS.sonnet46.firstParty;
+    const { getEffortEnvOverride, getInitialEffortSetting } = await import('./utils/effort.js');
+    const envEffort = getEffortEnvOverride();
+    const effortValue = envEffort === null ? undefined : envEffort ?? getInitialEffortSetting();
     
     // Lanzamos el chat con motor real y comandos
     const instance = render(
       <AppStateProvider initialState={{
         ...getDefaultAppState(),
         mainLoopModel,
+        effortValue,
       }}>
         <REPL 
           unmount={() => { instance.unmount(); process.exit(0); }}

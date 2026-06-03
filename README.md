@@ -55,6 +55,47 @@ Desde la TUI usa:
 
 Ese comando sirve para elegir proveedor, iniciar sesion o seleccionar modelo.
 
+## Skills Incluidas
+
+Claudex incluye skills internas listas para usar desde la TUI. Para frontend, UI y UX viene integrada:
+
+```text
+/ui-ux-pro-max
+```
+
+Esta skill se tiene en cuenta para construir, revisar y mejorar interfaces: landing pages, dashboards, SaaS, admin panels, e-commerce, portfolios, componentes, responsive design, accesibilidad, colores, tipografia, animaciones, formularios y charts.
+
+Tambien puedes invocarla con contexto:
+
+```text
+/ui-ux-pro-max revisa este dashboard y mejora la jerarquia visual
+```
+
+La integracion esta inspirada en `nextlevelbuilder/ui-ux-pro-max-skill` y adaptada como prompt interno bundled para que cualquier instalacion global de Claudex la tenga disponible sin instalar plugins aparte.
+
+## Modelo Y Esfuerzo
+
+En una instalacion nueva, Claudex no asume que ya tienes un proveedor real configurado. La TUI debe guiarte desde:
+
+```text
+Select your provider and model
+```
+
+Usa `/model` para escoger proveedor/modelo y autenticarte cuando haga falta.
+
+Para controlar consumo de tokens y profundidad de respuesta, usa `/effort` dentro de la TUI:
+
+```text
+/effort normal
+/effort low
+/effort medium
+/effort high
+/effort max
+/effort auto
+```
+
+`normal` equivale a `medium`, que es el valor recomendado por defecto para no arrancar siempre en alto consumo. `auto` deja que el proveedor/modelo decida cuando aplique.
+
 ## Uso
 
 Abrir la TUI:
@@ -144,7 +185,7 @@ npm pack
 Probar el paquete local:
 
 ```sh
-npm install -g ./claudex-ai-0.1.1.tgz
+npm install -g ./claudex-ai-0.1.2.tgz
 claudex --help
 claudex
 ```
