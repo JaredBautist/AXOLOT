@@ -373,7 +373,7 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
     case 'openai-codex/gpt-5.5-pro':
       return 'GPT 5.5 Pro · OpenAI Codex'
     case 'openclaw':
-      return 'Select your AI provider'
+      return 'Select your provider and model'
     case 'openai-codex/gpt-5.4':
       return 'GPT 5.4 · OpenAI Codex'
     case 'openai-codex/gpt-5.4-mini':
@@ -609,6 +609,10 @@ export function isLegacyModelRemapEnabled(): boolean {
 }
 
 export function modelDisplayString(model: ModelSetting): string {
+  if (model === 'openclaw') {
+    return 'Select your provider and model'
+  }
+
   if (model === null) {
     if (process.env.USER_TYPE === 'ant') {
       return `Default for Ants (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`

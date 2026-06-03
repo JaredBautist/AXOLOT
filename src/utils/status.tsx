@@ -364,7 +364,7 @@ export function buildAPIProviderProperties(): Property[] {
 export function getModelDisplayLabel(mainLoopModel: string | null): string {
   let modelLabel = modelDisplayString(mainLoopModel);
   if (isClaudexOpenClawMode() && mainLoopModel === null) {
-    return 'Select your AI provider';
+    return 'Select your provider and model';
   }
   if (mainLoopModel === null && isClaudeAISubscriber()) {
     const description = getClaudeAiUserDefaultModelDescription();

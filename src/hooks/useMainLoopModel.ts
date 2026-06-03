@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from 'react'
 import { onGrowthBookRefresh } from '../services/analytics/growthbook.js'
 import { useAppState } from '../state/AppState.js'
+import { isClaudexOpenClawMode } from '../utils/claudex/openclaw.js'
 import {
   getDefaultMainLoopModelSetting,
   type ModelName,
@@ -15,7 +16,7 @@ export function useMainLoopModel(): ModelName {
   const mainLoopModelForSession = useAppState(s => s.mainLoopModelForSession)
 
   if (
-    process.env.CLAUDEX_OPENCLAW_MODE === '1' &&
+    isClaudexOpenClawMode() &&
     !mainLoopModelForSession &&
     (!mainLoopModel || mainLoopModel === 'openclaw')
   ) {

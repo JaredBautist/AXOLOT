@@ -316,7 +316,7 @@ export function ClaudexOpenClawModelPicker({
         <Box flexDirection="column">
           <Box marginBottom={1} flexDirection="column">
             <Text color="remember" bold>
-              Select your AI provider
+              Select your provider and model
             </Text>
             <Text dimColor>
               Choose a provider, sign in, then pick a model.

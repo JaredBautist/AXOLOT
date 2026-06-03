@@ -119,6 +119,9 @@ export function getOpenClawProviderLabel(model: string | null): string {
     const id = model || getOpenClawPrimaryModel()
     const provider = id.includes('/') ? id.split('/')[0] : id
 
+    if (id === 'openclaw' || process.env.CLAUDEX_NEEDS_PROVIDER_SETUP === '1') {
+      return 'Select your provider and model'
+    }
     if (provider === 'openai') return 'OpenAI'
     if (provider === 'gemini' || provider === 'google') return 'Gemini'
     if (provider === 'claude' || provider === 'anthropic') return 'Claude API'
@@ -243,7 +246,10 @@ function directModel(
 }
 
 function directModelRef(): string {
-  const provider = String(directStore.get('activeProvider') || 'claude')
+  const configuredProvider = directStore.get('activeProvider')
+  if (!configuredProvider) return 'openclaw'
+
+  const provider = String(configuredProvider)
   const model = String(
     directStore.get(`models.${provider}`) || defaultDirectModel(provider),
   )

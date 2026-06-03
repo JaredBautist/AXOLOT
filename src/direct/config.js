@@ -12,7 +12,6 @@ const store = new Conf({
   projectName: 'claudex',
   configName: 'direct-providers',
   defaults: {
-    activeProvider: 'claude',
     models: DEFAULT_MODELS,
     apiKeys: {},
   },
@@ -99,6 +98,10 @@ export function setActiveProvider(provider) {
 
 export function getActiveProvider() {
   return normalizeProvider(store.get('activeProvider') || 'claude')
+}
+
+export function hasActiveProvider() {
+  return Boolean(store.get('activeProvider'))
 }
 
 export function setDefaultModel(provider, model) {

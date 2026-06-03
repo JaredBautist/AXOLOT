@@ -144,7 +144,7 @@ npm pack
 Probar el paquete local:
 
 ```sh
-npm install -g ./claudex-ai-0.1.0.tgz
+npm install -g ./claudex-ai-0.1.1.tgz
 claudex --help
 claudex
 ```

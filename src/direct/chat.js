@@ -13,6 +13,7 @@ import {
   getConfigPath,
   getCredentialType,
   getDefaultModel,
+  hasActiveProvider,
   saveApiKey,
   setActiveProvider,
   setDefaultModel,
@@ -23,7 +24,7 @@ const program = new Command()
 program
   .name('claudex')
   .description('Fast direct multi-provider AI CLI')
-  .version('0.1.0')
+  .version('0.1.1')
   .argument('[prompt...]', 'prompt text')
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')
@@ -183,24 +184,10 @@ function formatError(error) {
 }
 
 async function launchTui() {
-  const providerName = getActiveProvider()
-  const model = getDefaultModel(providerName)
-  let apiKey = getApiKey(providerName)
-
-  if (!apiKey) {
-    apiKey = await promptForApiKey(providerName)
-    if (!apiKey) {
-      console.error(
-        `No API key configured for ${providerName}. Run:\n` +
-          `  claudex auth ${providerName}\n` +
-          `or set the matching env var.`,
-      )
-      process.exitCode = 1
-      return
-    }
-    saveApiKey(providerName, apiKey)
-    setActiveProvider(providerName)
-  }
+  const providerName = hasActiveProvider() ? getActiveProvider() : null
+  const model = providerName ? getDefaultModel(providerName) : null
+  const apiKey = providerName ? getApiKey(providerName) : ''
+  const shouldSelectProvider = !providerName || !apiKey
 
   const thisFile = fileURLToPath(import.meta.url)
   const repoRoot = resolve(dirname(thisFile), '..', '..')
@@ -224,7 +211,13 @@ async function launchTui() {
     CLAUDE_CODE_TRUSTED_ROOT: launchDir,
   }
 
-  if (providerName === 'claude') {
+  if (shouldSelectProvider) {
+    env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY || 'claudex-native-provider'
+    env.CLAUDEX_NATIVE_MODE = '1'
+    env.CLAUDEX_NATIVE_PROVIDER = ''
+    env.CLAUDEX_NEEDS_PROVIDER_SETUP = '1'
+    env.ANTHROPIC_MODEL = 'openclaw'
+  } else if (providerName === 'claude') {
     if (getCredentialType(providerName) === 'oauth') {
       env.ANTHROPIC_AUTH_TOKEN = apiKey
     } else {
