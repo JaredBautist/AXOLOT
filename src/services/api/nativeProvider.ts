@@ -248,7 +248,7 @@ async function* streamOpenAIChat(
     .map(call => ({
       id: call.id || randomUUID(),
       name: call.name,
-      input: parseToolArguments(call.arguments),
+      input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
@@ -375,7 +375,7 @@ async function* streamOpenAIResponses(
     .map(call => ({
       id: call.id || randomUUID(),
       name: call.name,
-      input: parseToolArguments(call.arguments),
+      input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
@@ -468,7 +468,7 @@ function contentToText(content: unknown): string {
         typeof block === 'object' &&
         (block as any).type === 'tool_use'
       ) {
-        return `[tool_use:${(block as any).name}]\n${JSON.stringify((block as any).input ?? {})}`
+        return ''
       }
       return ''
     })
@@ -603,6 +603,21 @@ function parseToolArguments(value: string): Record<string, unknown> {
   }
 }
 
+function normalizeNativeToolInput(
+  toolName: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = { ...input }
+  if (toolName === 'Read') {
+    if (normalized.pages === '' || normalized.pages === null) {
+      delete normalized.pages
+    }
+    if (normalized.offset === null) delete normalized.offset
+    if (normalized.limit === null) delete normalized.limit
+  }
+  return normalized
+}
+
 function sanitizeGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(schema || { type: 'object' }))
   stripUnsupportedSchemaFields(clone)
@@ -633,7 +648,7 @@ function extractGeminiFunctionCalls(part: unknown): NativeToolCall[] {
       name: String(call.name || ''),
       input:
         call.args && typeof call.args === 'object' && !Array.isArray(call.args)
-          ? call.args
+          ? normalizeNativeToolInput(String(call.name || ''), call.args)
           : {},
     }))
     .filter((call: NativeToolCall) => call.name)
