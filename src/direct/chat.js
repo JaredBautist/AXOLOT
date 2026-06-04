@@ -24,7 +24,7 @@ const program = new Command()
 program
   .name('claudex')
   .description('Fast direct multi-provider AI CLI')
-  .version('0.1.1')
+  .version('0.1.2')
   .argument('[prompt...]', 'prompt text')
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')

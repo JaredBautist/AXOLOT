@@ -15,14 +15,6 @@ export function useMainLoopModel(): ModelName {
   const mainLoopModel = useAppState(s => s.mainLoopModel)
   const mainLoopModelForSession = useAppState(s => s.mainLoopModelForSession)
 
-  if (
-    isClaudexOpenClawMode() &&
-    !mainLoopModelForSession &&
-    (!mainLoopModel || mainLoopModel === 'openclaw')
-  ) {
-    return 'openclaw'
-  }
-
   // parseUserSpecifiedModel reads tengu_ant_model_override via
   // _CACHED_MAY_BE_STALE (in resolveAntModel). Until GB init completes,
   // that's the stale disk cache; after, it's the in-memory remoteEval map.
@@ -33,6 +25,14 @@ export function useMainLoopModel(): ModelName {
   // while /model (which also re-resolves) displays another.
   const [, forceRerender] = useReducer(x => x + 1, 0)
   useEffect(() => onGrowthBookRefresh(forceRerender), [])
+
+  if (
+    isClaudexOpenClawMode() &&
+    !mainLoopModelForSession &&
+    (!mainLoopModel || mainLoopModel === 'openclaw')
+  ) {
+    return 'openclaw'
+  }
 
   const model = parseUserSpecifiedModel(
     mainLoopModelForSession ??
