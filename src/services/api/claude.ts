@@ -777,6 +777,13 @@ export async function* queryModelWithStreaming({
       systemPrompt,
       signal,
       model: options.model,
+      tools,
+      options: {
+        getToolPermissionContext: options.getToolPermissionContext,
+        agents: options.agents,
+        allowedAgentTypes: options.allowedAgentTypes,
+        isNonInteractiveSession: options.isNonInteractiveSession,
+      },
     })
     return
   }

@@ -5,6 +5,9 @@ import type {
   StreamEvent,
   SystemAPIErrorMessage,
 } from '../../types/message.js'
+import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
+import type { ToolPermissionContext, Tools } from '../../Tool.js'
+import { toolToAPISchema } from '../../utils/api.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import Conf from 'conf'
@@ -19,6 +22,19 @@ type NativeProvider = 'openai' | 'gemini'
 type NativeRoute = {
   provider: NativeProvider
   model: string
+}
+
+type NativeToolOptions = {
+  getToolPermissionContext: () => Promise<ToolPermissionContext>
+  agents: AgentDefinition[]
+  allowedAgentTypes?: string[]
+  isNonInteractiveSession: boolean
+}
+
+type NativeToolCall = {
+  id: string
+  name: string
+  input: Record<string, unknown>
 }
 
 export function getNativeProviderRoute(model: string): NativeRoute | null {
@@ -46,16 +62,21 @@ export async function* queryNativeProvider({
   systemPrompt,
   signal,
   model,
+  tools,
+  options,
 }: {
   messages: Message[]
   systemPrompt: SystemPrompt
   signal: AbortSignal
   model: string
+  tools: Tools
+  options: NativeToolOptions
 }): AsyncGenerator<StreamEvent | AssistantMessage | SystemAPIErrorMessage> {
   const route = getNativeProviderRoute(model)
   if (!route) return
 
   try {
+    const nativeTools = await buildNativeToolSchemas(tools, options, model)
     yield fakeStreamEvent({
       type: 'message_start',
       message: {
@@ -76,6 +97,7 @@ export async function* queryNativeProvider({
     })
 
     let text = ''
+    let toolCalls: NativeToolCall[] = []
     const onChunk = (chunk: string) => {
       text += chunk
       return fakeStreamEvent({
@@ -86,12 +108,14 @@ export async function* queryNativeProvider({
     }
 
     if (route.provider === 'openai') {
-      for await (const event of streamOpenAI(route.model, messages, systemPrompt, signal, onChunk)) {
-        yield event
+      for await (const event of streamOpenAI(route.model, messages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
       }
     } else {
-      for await (const event of streamGemini(route.model, messages, systemPrompt, signal, onChunk)) {
-        yield event
+      for await (const event of streamGemini(route.model, messages, systemPrompt, signal, nativeTools.gemini, onChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
       }
     }
 
@@ -101,14 +125,14 @@ export async function* queryNativeProvider({
     })
     yield fakeStreamEvent({
       type: 'message_delta',
-      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      delta: { stop_reason: toolCalls.length > 0 ? 'tool_use' : 'end_turn', stop_sequence: null },
       usage: {
         output_tokens: Math.max(1, Math.ceil(text.length / 4)),
       },
     })
     yield fakeStreamEvent({ type: 'message_stop' })
 
-    yield createNativeAssistantMessage(model, text)
+    yield createNativeAssistantMessage(model, text, toolCalls)
   } catch (error) {
     if (signal.aborted) return
     yield createAssistantAPIErrorMessage({
@@ -160,8 +184,9 @@ async function* streamOpenAI(
   messages: Message[],
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
+  tools: OpenAIToolSchema[],
   onChunk: (chunk: string) => StreamEvent,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = await ensureOpenAIToken()
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
 
@@ -169,9 +194,9 @@ async function* streamOpenAI(
     (directStore.get('credentialType.openai') as string) === 'oauth'
 
   if (isOAuthKey) {
-    yield* streamOpenAIResponses(model, messages, systemPrompt, signal, onChunk, apiKey)
+    yield* streamOpenAIResponses(model, messages, systemPrompt, signal, tools, onChunk, apiKey)
   } else {
-    yield* streamOpenAIChat(model, messages, systemPrompt, signal, onChunk, apiKey)
+    yield* streamOpenAIChat(model, messages, systemPrompt, signal, tools, onChunk, apiKey)
   }
 }
 
@@ -180,27 +205,52 @@ async function* streamOpenAIChat(
   messages: Message[],
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
+  tools: OpenAIToolSchema[],
   onChunk: (chunk: string) => StreamEvent,
   apiKey: string,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const { default: OpenAI } = await import('openai')
   const client = new OpenAI({ apiKey })
+  const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
   const stream = await client.chat.completions.create(
     {
       model,
       stream: true,
       messages: [
-        { role: 'system', content: systemPrompt.join('\n\n') },
+        { role: 'system', content: nativeSystemPrompt(systemPrompt) },
         ...messagesToOpenAI(messages),
       ],
+      ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
     },
     { signal },
   )
 
   for await (const part of stream) {
     const delta = part.choices?.[0]?.delta?.content
-    if (delta) yield onChunk(delta)
+    if (delta) yield { type: 'event', event: onChunk(delta) }
+
+    for (const call of part.choices?.[0]?.delta?.tool_calls ?? []) {
+      const index = call.index ?? 0
+      const existing = toolCallChunks.get(index) ?? {
+        id: '',
+        name: '',
+        arguments: '',
+      }
+      if (call.id) existing.id = call.id
+      if (call.function?.name) existing.name = call.function.name
+      if (call.function?.arguments) existing.arguments += call.function.arguments
+      toolCallChunks.set(index, existing)
+    }
   }
+
+  const toolCalls = [...toolCallChunks.values()]
+    .filter(call => call.name)
+    .map(call => ({
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: parseToolArguments(call.arguments),
+    }))
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
 async function* streamOpenAIResponses(
@@ -208,9 +258,10 @@ async function* streamOpenAIResponses(
   messages: Message[],
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
+  tools: OpenAIToolSchema[],
   onChunk: (chunk: string) => StreamEvent,
   apiKey: string,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const isOAuthKey =
     (directStore.get('credentialType.openai') as string) === 'oauth'
 
@@ -240,9 +291,10 @@ async function* streamOpenAIResponses(
   const body = JSON.stringify({
     model,
     input,
-    instructions: systemPrompt.join('\n\n'),
+    instructions: nativeSystemPrompt(systemPrompt),
     stream: true,
     store: false,
+    ...(tools.length > 0 ? { tools: tools.map(toResponsesTool), tool_choice: 'auto' } : {}),
   })
 
   const url = isOAuthKey
@@ -266,6 +318,7 @@ async function* streamOpenAIResponses(
 
   const decoder = new TextDecoder()
   let buffer = ''
+  const toolCallChunks = new Map<string, { id: string; name: string; arguments: string }>()
 
   while (true) {
     const { done, value } = await reader.read()
@@ -283,13 +336,48 @@ async function* streamOpenAIResponses(
       try {
         const event = JSON.parse(data)
         if (event.type === 'response.output_text.delta' && event.delta) {
-          yield onChunk(event.delta)
+          yield { type: 'event', event: onChunk(event.delta) }
+        }
+        if (event.type === 'response.function_call_arguments.delta') {
+          const id = String(event.item_id || event.output_index || randomUUID())
+          const existing = toolCallChunks.get(id) ?? {
+            id,
+            name: String(event.name || ''),
+            arguments: '',
+          }
+          existing.arguments += String(event.delta || '')
+          toolCallChunks.set(id, existing)
+        } else if (
+          (event.type === 'response.output_item.added' ||
+            event.type === 'response.output_item.done') &&
+          event.item?.type === 'function_call'
+        ) {
+          const id = String(event.item.id || event.output_index || randomUUID())
+          const existing = toolCallChunks.get(id) ?? {
+            id,
+            name: '',
+            arguments: '',
+          }
+          if (event.item.name) existing.name = String(event.item.name)
+          if (event.type === 'response.output_item.done') {
+            existing.arguments = String(event.item.arguments || existing.arguments)
+          }
+          toolCallChunks.set(id, existing)
         }
       } catch {
         // skip malformed JSON
       }
     }
   }
+
+  const toolCalls = [...toolCallChunks.values()]
+    .filter(call => call.name)
+    .map(call => ({
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: parseToolArguments(call.arguments),
+    }))
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
 async function* streamGemini(
@@ -297,8 +385,9 @@ async function* streamGemini(
   messages: Message[],
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
+  tools: GeminiToolSchema[],
   onChunk: (chunk: string) => StreamEvent,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = storeApiKey('gemini')
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
 
@@ -306,7 +395,8 @@ async function* streamGemini(
   const client = new GoogleGenerativeAI(apiKey)
   const genModel = client.getGenerativeModel({
     model,
-    systemInstruction: systemPrompt.join('\n\n'),
+    systemInstruction: nativeSystemPrompt(systemPrompt),
+    ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
   })
   const result = await genModel.generateContentStream(
     {
@@ -315,10 +405,15 @@ async function* streamGemini(
     { signal },
   )
 
+  const toolCalls: NativeToolCall[] = []
   for await (const part of result.stream) {
+    for (const call of extractGeminiFunctionCalls(part)) {
+      toolCalls.push(call)
+    }
     const delta = part.text()
-    if (delta) yield onChunk(delta)
+    if (delta) yield { type: 'event', event: onChunk(delta) }
   }
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
 function messagesToOpenAI(messages: Message[]): Array<{
@@ -368,6 +463,13 @@ function contentToText(content: unknown): string {
       ) {
         return `[tool_result]\n${contentToText((block as any).content)}`
       }
+      if (
+        block &&
+        typeof block === 'object' &&
+        (block as any).type === 'tool_use'
+      ) {
+        return `[tool_use:${(block as any).name}]\n${JSON.stringify((block as any).input ?? {})}`
+      }
       return ''
     })
     .filter(Boolean)
@@ -377,7 +479,17 @@ function contentToText(content: unknown): string {
 function createNativeAssistantMessage(
   model: string,
   text: string,
+  toolCalls: NativeToolCall[] = [],
 ): AssistantMessage {
+  const content = [
+    ...(text ? [{ type: 'text', text }] : []),
+    ...toolCalls.map(call => ({
+      type: 'tool_use',
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: call.input,
+    })),
+  ]
   return {
     type: 'assistant',
     uuid: randomUUID(),
@@ -395,10 +507,146 @@ function createNativeAssistantMessage(
         ...emptyUsage(),
         output_tokens: Math.max(1, Math.ceil(text.length / 4)),
       },
-      content: [{ type: 'text', text: text || '(no content)' }],
+      content: content.length > 0 ? content : [{ type: 'text', text: '(no content)' }],
       context_management: null,
     },
   } as AssistantMessage
+}
+
+type OpenAIToolSchema = {
+  type: 'function'
+  function: {
+    name: string
+    description?: string
+    parameters: Record<string, unknown>
+    strict?: boolean
+  }
+}
+
+type OpenAIResponsesToolSchema = {
+  type: 'function'
+  name: string
+  description?: string
+  parameters: Record<string, unknown>
+  strict?: boolean
+}
+
+type GeminiToolSchema = {
+  name: string
+  description?: string
+  parameters: Record<string, unknown>
+}
+
+async function buildNativeToolSchemas(
+  tools: Tools,
+  options: NativeToolOptions,
+  model: string,
+): Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }> {
+  const enabledTools = tools.filter(tool => tool.isEnabled())
+  const schemas = await Promise.all(
+    enabledTools.map(tool =>
+      toolToAPISchema(tool, {
+        getToolPermissionContext: options.getToolPermissionContext,
+        tools,
+        agents: options.agents,
+        allowedAgentTypes: options.allowedAgentTypes,
+        model,
+      }),
+    ),
+  )
+
+  const functionTools = schemas.filter(
+    schema => 'input_schema' in schema && 'name' in schema,
+  ) as Array<{
+    name: string
+    description?: string
+    input_schema?: Record<string, unknown>
+    strict?: boolean
+  }>
+
+  return {
+    openai: functionTools.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.input_schema || { type: 'object' },
+        ...(tool.strict ? { strict: true } : {}),
+      },
+    })),
+    gemini: functionTools.map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: sanitizeGeminiSchema(tool.input_schema || { type: 'object' }),
+    })),
+  }
+}
+
+function nativeSystemPrompt(systemPrompt: SystemPrompt): string {
+  return [
+    systemPrompt.join('\n\n'),
+    'You are running inside Claudex. You have access to CLI tools such as Read, Write, Edit, Bash, Glob, Grep, and other listed tools. When a task requires reading files, executing terminal commands, creating folders, editing files, or inspecting the workspace, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function parseToolArguments(value: string): Record<string, unknown> {
+  if (!value.trim()) return {}
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function sanitizeGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const clone = JSON.parse(JSON.stringify(schema || { type: 'object' }))
+  stripUnsupportedSchemaFields(clone)
+  return clone
+}
+
+function stripUnsupportedSchemaFields(value: unknown): void {
+  if (!value || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const item of value) stripUnsupportedSchemaFields(item)
+    return
+  }
+  const obj = value as Record<string, unknown>
+  delete obj.$schema
+  delete obj.additionalProperties
+  delete obj.default
+  for (const child of Object.values(obj)) stripUnsupportedSchemaFields(child)
+}
+
+function extractGeminiFunctionCalls(part: unknown): NativeToolCall[] {
+  const response = (part as any)?.response
+  const parts = response?.candidates?.[0]?.content?.parts ?? []
+  return parts
+    .map((p: any) => p?.functionCall)
+    .filter(Boolean)
+    .map((call: any) => ({
+      id: randomUUID(),
+      name: String(call.name || ''),
+      input:
+        call.args && typeof call.args === 'object' && !Array.isArray(call.args)
+          ? call.args
+          : {},
+    }))
+    .filter((call: NativeToolCall) => call.name)
+}
+
+function toResponsesTool(tool: OpenAIToolSchema): OpenAIResponsesToolSchema {
+  return {
+    type: 'function',
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: tool.function.parameters,
+    ...(tool.function.strict ? { strict: true } : {}),
+  }
 }
 
 function fakeStreamEvent(event: Record<string, unknown>, ttftMs?: number): StreamEvent {
