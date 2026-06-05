@@ -2,34 +2,47 @@ import React from 'react'
 import { Box, Text } from '../ink.js'
 
 const C = {
-  WHITE: '#D6D8DA',
-  GREY: '#8F969F',
-  DARK_GREY: '#5F6971',
-  BLUE: '#1E8AFD',
-  RED: '#FA0000',
+  BODY: '#F3A0A8',
+  BODY_LIGHT: '#FFD0D4',
+  SHADOW: '#E86B8F',
+  OUTLINE: '#C94F7C',
+  BLUSH: '#FF6F79',
+  FACE: '#2D1719',
 } as const
 
-function color(ch: string): string | undefined {
+function isFacePixel(row: number, col: number): boolean {
+  return (
+    (row === 11 && ((col >= 19 && col <= 21) || (col >= 32 && col <= 34))) ||
+    (row === 12 && col >= 24 && col <= 29)
+  )
+}
+
+function color(ch: string, row: number, col: number): string | undefined {
+  if (isFacePixel(row, col)) return C.FACE
+
   switch (ch) {
-    // En terminal oscuro NO conviene usar negro,
-    // porque se pierde el logo. El @ debe verse claro.
-    case '@':
-    case '%':
-      return C.WHITE
-
-    // Sombras / pelaje
-    case '*':
-      return C.GREY
-
-    case '+':
+    // Cuerpo principal del ajolote.
     case '-':
-    case '=':
-    case ':':
-      return C.DARK_GREY
+    case '%':
+      return C.BODY
 
-    // Moño / parte roja inferior
+    // Luces suaves para panza/zonas claras.
     case '#':
-      return C.RED
+      return C.BODY_LIGHT
+
+    // Sombras y volumen.
+    case '=':
+    case '*':
+    case '+':
+      return C.SHADOW
+
+    // Contorno oscuro, legible en terminal claro y oscuro.
+    case ':':
+      return C.OUTLINE
+
+    // Mejillas, branquias o acentos rosados fuertes.
+    case '@':
+      return C.BLUSH
 
     default:
       return undefined
@@ -41,18 +54,20 @@ type Span = {
   txt: string
 }
 
-function spans(line: string): Span[] {
+function spans(line: string, rowIndex: number): Span[] {
   const out: Span[] = []
   let cur: Span | null = null
 
-  for (const ch of line) {
-    const col = color(ch)
+  for (let colIndex = 0; colIndex < line.length; colIndex++) {
+    const ch = line[colIndex]!
+    const col = color(ch, rowIndex, colIndex)
+    const txt = col ? (ch === ':' ? ':' : ch === '#' ? '%' : '#') : ' '
 
     if (cur && cur.col === col) {
-      cur.txt += ch
+      cur.txt += txt
     } else {
       if (cur) out.push(cur)
-      cur = { col, txt: ch }
+      cur = { col, txt }
     }
   }
 
@@ -61,36 +76,34 @@ function spans(line: string): Span[] {
 }
 
 const ROWS = [
-  '      @@@                      @@@',
-  '   @@@@*@@@@                @@@@*@@@@',
-  '  @@@@  *@@@+              %@@@*  @@@@',
-  ' @@@%*-   @@@@            @@@@   -**@@@',
-  ' @@@@ ----***@@@@@@@@@@@@@@***---- @@@@',
-  ' @@@@ -----+***@@@@@@@@@@***++---- @@@@',
-  ' @@@@ ----********************---- @@@@',
-  ' @@@@******************************@@@@',
-  ' @@@@******************************@@@@',
-  '@@@@********   **********   ********@@@@',
-  '@@********@@@@@ ******** @@@@@********@@',
-  '@@*******-@@@@@@********@@@@@@-*******@@',
-  '@@***** --@@@@@@%*******@@@@@@-- *****@@',
-  '@@**       ---##        ##---       **@@',
-  '@@*:             @@@@@@             -*@@',
-  '@@*==           @@@@@@@@           =+*@@',
-  '@@@===       @  @@@@@@@@  @       ===*@@',
-  ' @@@==-     @@@@@@@@@@@@@@@@     -==@@@',
-  '  @@@=*=-     @@@@@@@@@@@@     -=*=@@@',
-  '   @@@**@@@@@@            @@@@@@**@@@',
-  '    @@@@@@##@@@          @@@##@@@@@@',
-  '      @@@@#####@@@@@@@@@@#####@@@@',
-  '       @@@######@@@##@@@######@@@',
-  '       @@@######@@@@@@@@######@@@',
-  '       @@@####@@@@@@@@@@@@####@@@',
-  '        *@@@@@@@@       @@@@@@@@',
+  ' ..................................................,',
+  '+.................................................,',
+  '%...........--....................................,',
+  '..........:%===%%....................:#%%#%-......,',
+  '..........=%=====%:....:=+*+=:......%%=====%......,',
+  '........::.#%=====%%%+--------=*%%=%======%-......,',
+  '......:%===*%%*==------------------=====%%*##-....,',
+  '......:%=======----------------------%%#=====##...,',
+  '........%%====------------------------=======%-...,',
+  '.......+%%%%%+-------------------------=*%%%-.....,',
+  '......%======--------------------------=++*%%=....,',
+  '......+%*==+*=-----%%%----------%%%----======%:...,',
+  '.............%--===+#---*%**%+--*%+==--%%%%%%-....,',
+  '.......-*+....%#-------------------=--%...........,',
+  '.....%%--=%...:%%%*----------------*%-............,',
+  '...:%---=-%.:%-----------------=%=:...............,',
+  '...%---==-+%#-------------------%:................,',
+  '...%----=-+%-------=----%--------%................,',
+  '...%------%--------##---%---=#---%................,',
+  '...-%-----%---------*%#%#----%%+*%................,',
+  '....:%*----%---------------=%-.............:#+%:..,',
+  '.......+%%%%%-----#*==+*%%*#+...............%%%%*.,',
+  '.............%%--*%....*%=#%..................%...,',
+  '...............:-.................................,',
 ]
 
 const WIDTH = Math.max(...ROWS.map(row => row.length))
-const RENDERED = ROWS.map(row => spans(row.padEnd(WIDTH, ' ')))
+const RENDERED = ROWS.map((row, ri) => spans(row.padEnd(WIDTH, ' '), ri))
 
 export function ClaudexASCIILogo(): React.ReactNode {
   return (
