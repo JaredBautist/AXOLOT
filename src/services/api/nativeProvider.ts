@@ -17,6 +17,15 @@ const directStore = new Conf({
   configName: 'direct-providers',
 })
 
+const DEFAULT_NATIVE_HISTORY_MESSAGES = 30
+const DEFAULT_NATIVE_TOOL_DESCRIPTION_CHARS = 700
+const DEFAULT_NATIVE_TOOL_RESULT_CHARS = 16_000
+
+const nativeToolSchemaCache = new Map<
+  string,
+  Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }>
+>()
+
 type NativeProvider = 'openai' | 'gemini'
 
 type NativeRoute = {
@@ -77,6 +86,7 @@ export async function* queryNativeProvider({
 
   try {
     const nativeTools = await buildNativeToolSchemas(tools, options, model)
+    const nativeMessages = limitNativeHistory(messages)
     yield fakeStreamEvent({
       type: 'message_start',
       message: {
@@ -108,12 +118,12 @@ export async function* queryNativeProvider({
     }
 
     if (route.provider === 'openai') {
-      for await (const event of streamOpenAI(route.model, messages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+      for await (const event of streamOpenAI(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
     } else {
-      for await (const event of streamGemini(route.model, messages, systemPrompt, signal, nativeTools.gemini, onChunk)) {
+      for await (const event of streamGemini(route.model, nativeMessages, systemPrompt, signal, nativeTools.gemini, onChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
@@ -581,7 +591,10 @@ function contentToToolResults(
     )
     .map(block => ({
       id: String((block as any).tool_use_id),
-      output: contentToText((block as any).content) || stringifyToolResult((block as any).content),
+      output: truncateNativeToolResult(
+        contentToText((block as any).content) ||
+          stringifyToolResult((block as any).content),
+      ),
     }))
 }
 
@@ -702,6 +715,24 @@ async function buildNativeToolSchemas(
   options: NativeToolOptions,
   model: string,
 ): Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }> {
+  const cacheKey = [
+    model,
+    options.allowedAgentTypes?.join(',') ?? '',
+    tools.map(tool => `${tool.name}:${tool.isEnabled() ? '1' : '0'}`).join('|'),
+  ].join('::')
+  const cached = nativeToolSchemaCache.get(cacheKey)
+  if (cached) return cached
+
+  const buildPromise = buildNativeToolSchemasUncached(tools, options, model)
+  nativeToolSchemaCache.set(cacheKey, buildPromise)
+  return buildPromise
+}
+
+async function buildNativeToolSchemasUncached(
+  tools: Tools,
+  options: NativeToolOptions,
+  model: string,
+): Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }> {
   const enabledTools = tools.filter(tool => tool.isEnabled())
   const schemas = await Promise.all(
     enabledTools.map(tool =>
@@ -729,15 +760,17 @@ async function buildNativeToolSchemas(
       type: 'function',
       function: {
         name: tool.name,
-        description: tool.description,
-        parameters: tool.input_schema || { type: 'object' },
+        description: compactNativeToolDescription(tool.description),
+        parameters: compactNativeInputSchema(tool.input_schema || { type: 'object' }),
         ...(tool.strict ? { strict: true } : {}),
       },
     })),
     gemini: functionTools.map(tool => ({
       name: tool.name,
-      description: tool.description,
-      parameters: sanitizeGeminiSchema(tool.input_schema || { type: 'object' }),
+      description: compactNativeToolDescription(tool.description),
+      parameters: sanitizeGeminiSchema(
+        compactNativeInputSchema(tool.input_schema || { type: 'object' }),
+      ),
     })),
   }
 }
@@ -761,6 +794,46 @@ function parseToolArguments(value: string): Record<string, unknown> {
   } catch {
     return {}
   }
+}
+
+function limitNativeHistory(messages: Message[]): Message[] {
+  const limit = readPositiveIntEnv(
+    'CLAUDEX_NATIVE_HISTORY_MESSAGES',
+    DEFAULT_NATIVE_HISTORY_MESSAGES,
+  )
+  if (messages.length <= limit) return messages
+  return messages.slice(-limit)
+}
+
+function compactNativeToolDescription(description: string | undefined): string | undefined {
+  if (!description) return description
+  const limit = readPositiveIntEnv(
+    'CLAUDEX_NATIVE_TOOL_DESCRIPTION_CHARS',
+    DEFAULT_NATIVE_TOOL_DESCRIPTION_CHARS,
+  )
+  const normalized = description.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= limit) return normalized
+  return `${normalized.slice(0, limit).trimEnd()}...`
+}
+
+function compactNativeInputSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const clone = JSON.parse(JSON.stringify(schema || { type: 'object' }))
+  stripVerboseSchemaFields(clone)
+  return clone
+}
+
+function truncateNativeToolResult(output: string): string {
+  const limit = readPositiveIntEnv(
+    'CLAUDEX_NATIVE_TOOL_RESULT_CHARS',
+    DEFAULT_NATIVE_TOOL_RESULT_CHARS,
+  )
+  if (output.length <= limit) return output
+  return `${output.slice(0, limit)}\n\n[Claudex truncated this tool result for native-provider speed/token usage. Use Read with offset/limit or a narrower command if more content is needed.]`
+}
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] || '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function normalizeNativeToolInput(
@@ -795,6 +868,19 @@ function stripUnsupportedSchemaFields(value: unknown): void {
   delete obj.additionalProperties
   delete obj.default
   for (const child of Object.values(obj)) stripUnsupportedSchemaFields(child)
+}
+
+function stripVerboseSchemaFields(value: unknown): void {
+  if (!value || typeof value !== 'object') return
+  if (Array.isArray(value)) {
+    for (const item of value) stripVerboseSchemaFields(item)
+    return
+  }
+  const obj = value as Record<string, unknown>
+  delete obj.description
+  delete obj.markdownDescription
+  delete obj.examples
+  for (const child of Object.values(obj)) stripVerboseSchemaFields(child)
 }
 
 function extractGeminiFunctionCalls(part: unknown): NativeToolCall[] {
