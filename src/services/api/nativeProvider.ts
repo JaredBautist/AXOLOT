@@ -218,7 +218,7 @@ async function* streamOpenAIChat(
       stream: true,
       messages: [
         { role: 'system', content: nativeSystemPrompt(systemPrompt) },
-        ...messagesToOpenAI(messages),
+        ...messagesToOpenAIChat(messages),
       ],
       ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
     },
@@ -286,7 +286,7 @@ async function* streamOpenAIResponses(
     }
   }
 
-  const input = messagesToOpenAI(messages)
+  const input = messagesToOpenAIResponses(messages)
 
   const body = JSON.stringify({
     model,
@@ -416,35 +416,106 @@ async function* streamGemini(
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
-function messagesToOpenAI(messages: Message[]): Array<{
-  role: 'user' | 'assistant'
-  content: string
-}> {
+function messagesToOpenAIChat(messages: Message[]): Array<Record<string, unknown>> {
   return messages.flatMap(message => {
     const role = (message as any).message?.role
     if (role !== 'user' && role !== 'assistant') return []
-    const content = contentToText((message as any).message?.content)
-    if (!content) return []
-    return [{ role, content }]
+    const content = (message as any).message?.content
+
+    if (role === 'assistant') {
+      const text = contentToText(content)
+      const toolCalls = contentToToolCalls(content)
+      if (toolCalls.length === 0 && !text) return []
+      return [
+        {
+          role: 'assistant',
+          content: text || null,
+          ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+        },
+      ]
+    }
+
+    const toolResults = contentToToolResults(content)
+    if (toolResults.length > 0) {
+      return toolResults.map(result => ({
+        role: 'tool',
+        tool_call_id: result.id,
+        content: result.output,
+      }))
+    }
+
+    const text = contentToText(content)
+    if (!text) return []
+    return [{ role: 'user', content: text }]
   })
 }
 
-function messagesToGemini(messages: Message[]): Array<{
-  role: 'user' | 'model'
-  parts: Array<{ text: string }>
-}> {
+function messagesToOpenAIResponses(messages: Message[]): Array<Record<string, unknown>> {
   return messages.flatMap(message => {
     const role = (message as any).message?.role
     if (role !== 'user' && role !== 'assistant') return []
-    const text = contentToText((message as any).message?.content)
+    const content = (message as any).message?.content
+
+    if (role === 'assistant') {
+      const text = contentToText(content)
+      const items: Record<string, unknown>[] = []
+      if (text) items.push({ role: 'assistant', content: text })
+      for (const call of contentToToolCalls(content)) {
+        items.push({
+          type: 'function_call',
+          call_id: call.id,
+          name: (call.function as any).name,
+          arguments: (call.function as any).arguments,
+        })
+      }
+      return items
+    }
+
+    const toolResults = contentToToolResults(content)
+    if (toolResults.length > 0) {
+      return toolResults.map(result => ({
+        type: 'function_call_output',
+        call_id: result.id,
+        output: result.output,
+      }))
+    }
+
+    const text = contentToText(content)
     if (!text) return []
-    return [
-      {
-        role: role === 'assistant' ? 'model' : 'user',
-        parts: [{ text }],
-      },
-    ]
+    return [{ role: 'user', content: text }]
   })
+}
+
+function messagesToGemini(messages: Message[]): Array<Record<string, unknown>> {
+  const toolNamesById = new Map<string, string>()
+  const converted: Array<Record<string, unknown>> = []
+
+  for (const message of messages) {
+    const role = (message as any).message?.role
+    if (role !== 'user' && role !== 'assistant') continue
+    const content = (message as any).message?.content
+    const text = contentToText(content)
+    const toolCalls = contentToGeminiFunctionCalls(content)
+    for (const call of contentToToolUseMetadata(content)) {
+      toolNamesById.set(call.id, call.name)
+    }
+    const toolResults = contentToGeminiFunctionResponses(
+      content,
+      toolNamesById,
+    )
+    const parts = [
+      ...(text ? [{ text }] : []),
+      ...toolCalls,
+      ...toolResults,
+    ]
+    if (parts.length === 0) continue
+    converted.push({
+      role: role === 'assistant' ? 'model' : 'user',
+      parts,
+    })
+  }
+
+  return converted
 }
 
 function contentToText(content: unknown): string {
@@ -461,7 +532,7 @@ function contentToText(content: unknown): string {
         typeof block === 'object' &&
         (block as any).type === 'tool_result'
       ) {
-        return `[tool_result]\n${contentToText((block as any).content)}`
+        return ''
       }
       if (
         block &&
@@ -474,6 +545,95 @@ function contentToText(content: unknown): string {
     })
     .filter(Boolean)
     .join('\n')
+}
+
+function contentToToolCalls(content: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(content)) return []
+  return content
+    .filter(
+      block =>
+        block &&
+        typeof block === 'object' &&
+        (block as any).type === 'tool_use' &&
+        (block as any).name,
+    )
+    .map(block => ({
+      id: String((block as any).id || randomUUID()),
+      type: 'function',
+      function: {
+        name: String((block as any).name),
+        arguments: JSON.stringify((block as any).input ?? {}),
+      },
+    }))
+}
+
+function contentToToolResults(
+  content: unknown,
+): Array<{ id: string; output: string }> {
+  if (!Array.isArray(content)) return []
+  return content
+    .filter(
+      block =>
+        block &&
+        typeof block === 'object' &&
+        (block as any).type === 'tool_result' &&
+        (block as any).tool_use_id,
+    )
+    .map(block => ({
+      id: String((block as any).tool_use_id),
+      output: contentToText((block as any).content) || stringifyToolResult((block as any).content),
+    }))
+}
+
+function contentToToolUseMetadata(
+  content: unknown,
+): Array<{ id: string; name: string }> {
+  if (!Array.isArray(content)) return []
+  return content
+    .filter(
+      block =>
+        block &&
+        typeof block === 'object' &&
+        (block as any).type === 'tool_use' &&
+        (block as any).id &&
+        (block as any).name,
+    )
+    .map(block => ({
+      id: String((block as any).id),
+      name: String((block as any).name),
+    }))
+}
+
+function contentToGeminiFunctionCalls(content: unknown): Array<Record<string, unknown>> {
+  return contentToToolCalls(content).map(call => ({
+    functionCall: {
+      name: (call.function as any).name,
+      args: parseToolArguments(String((call.function as any).arguments || '{}')),
+    },
+  }))
+}
+
+function contentToGeminiFunctionResponses(
+  content: unknown,
+  toolNamesById: Map<string, string>,
+): Array<Record<string, unknown>> {
+  return contentToToolResults(content).map(result => ({
+    functionResponse: {
+      name: toolNamesById.get(result.id) || 'tool_result',
+      response: {
+        result: result.output,
+      },
+    },
+  }))
+}
+
+function stringifyToolResult(content: unknown): string {
+  if (typeof content === 'string') return content
+  try {
+    return JSON.stringify(content)
+  } catch {
+    return String(content)
+  }
 }
 
 function createNativeAssistantMessage(
@@ -500,7 +660,7 @@ function createNativeAssistantMessage(
       container: null,
       model,
       role: 'assistant',
-      stop_reason: 'end_turn',
+      stop_reason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
       stop_sequence: null,
       type: 'message',
       usage: {
@@ -585,7 +745,7 @@ async function buildNativeToolSchemas(
 function nativeSystemPrompt(systemPrompt: SystemPrompt): string {
   return [
     systemPrompt.join('\n\n'),
-    'You are running inside Claudex. You have access to CLI tools such as Read, Write, Edit, Bash, Glob, Grep, and other listed tools. When a task requires reading files, executing terminal commands, creating folders, editing files, or inspecting the workspace, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.',
+    'You are running inside Claudex. You have access to every enabled CLI tool listed in the tool schema, including file tools, shell tools, editing tools, search tools, agents, and skill/internal-prompt tools. When a task requires reading files, executing terminal commands, creating folders, editing files, inspecting the workspace, using an internal prompt, or applying a bundled skill, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.',
   ]
     .filter(Boolean)
     .join('\n\n')
