@@ -11,6 +11,11 @@ import { registerSkillifySkill } from './skillify.js'
 import { registerStuckSkill } from './stuck.js'
 import { registerCodexFrontendMasterSkill } from './codexFrontendMaster.js'
 import { registerUiUxProMaxSkill } from './uiUxProMax.js'
+import { registerTestSkill } from './test.js'
+import { registerArchitectureSkill } from './architecture.js'
+import { registerReviewSkill } from './review.js'
+import { registerRefactorSkill } from './refactor.js'
+import { registerDocsSkill } from './docs.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
 import { registerVerifySkill } from './verify.js'
 
@@ -36,6 +41,11 @@ export function initBundledSkills(): void {
   registerStuckSkill()
   registerCodexFrontendMasterSkill()
   registerUiUxProMaxSkill()
+  registerTestSkill()
+  registerArchitectureSkill()
+  registerReviewSkill()
+  registerRefactorSkill()
+  registerDocsSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')

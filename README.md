@@ -57,21 +57,66 @@ Ese comando sirve para elegir proveedor, iniciar sesion o seleccionar modelo.
 
 ## Skills Incluidas
 
-Claudex incluye skills internas listas para usar desde la TUI. Para frontend, UI y UX viene integrada:
+Claudex incluye skills internas listas para usar desde la TUI. Se invocan con `/<skill-name>` y algunas estan siempre activas en el system prompt (no requieren invocacion explicita).
+
+### Frontend (Siempre Activos)
+
+Los estandares de calidad frontend estan embebidos directamente en el system prompt — el modelo los tiene disponibles desde el turno 1 sin necesidad de invocar el skill:
+
+- **`/codex-frontend-master`**: Estandares de frontend de calidad Claude Code: tipografia, color, animaciones, accesibilidad, SDD frontend, responsive, glassmorphism, scroll reveal, checklist de calidad.
+- **`/ui-ux-pro-max`**: Inteligencia de diseno UI/UX: branding por contexto (SaaS, editorial, lujo, gaming, salud), checklist de implementacion, calidad visual.
+
+Ambos se cargan automaticamente al iniciar la sesion. Incluye todos los estandares de:
+- Tipografia (Space Grotesk, Cormorant, Playfair, DM Sans, etc.)
+- Paletas de color (Dark Premium, Light Editorial, Corporate Luxury)
+- Sistema de espaciado 8px grid
+- Animaciones (fade + slide, shimmer, scroll reveal)
+- Accesibilidad WCAG 2.2 AA
+- Glassmorphism, gradient meshes, noise textures
+- Anti-patrones prohibidos
+
+### Calidad de Codigo
+
+- **`/verify`**: Verifica que los cambios funcionen — detecta el tipo de proyecto y ejecuta lint → typecheck → test → build automaticamente.
+- **`/review`**: Code review a nivel PR: seguridad (inyeccion, auth, secretos), calidad (edge cases, errores,性能), mantenibilidad, dependencias.
+- **`/test`**: Escribe y ejecuta tests — analiza el codigo, identifica el framework, genera tests unit/integration/e2e con objetivos de cobertura.
+- **`/refactor`**: Refactoring multi-step seguro: analiza → planifica → ejecuta paso a paso → valida. Incluye patrones (extract module, split function, migrate pattern) y anti-patrones.
+
+### Diseno y Documentacion
+
+- **`/architecture`**: Diseno de sistemas, Architecture Decision Records (ADRs), analisis de trade-offs, diagramas mermaid. Checklist de escalabilidad, reliability, seguridad, costo, performance.
+- **`/docs`**: Genera y actualiza documentacion: README, API docs, changelogs (keepachangelog), contributing guides.
+
+### Productividad
+
+- **`/simplify`**: Revision paralela de codigo con 3 agentes (reuso, calidad, eficiencia).
+- **`/debug`**: Diagnostico de sesiones — lee logs de debug y resuelve problemas de la TUI.
+- **`/remember`**: Revision y promocion de memoria (CLAUDE.md).
+- **`/batch`**: Orquestacion de trabajo en paralelo a gran escala.
+- **`/stuck`**: Investigacion diagnostica a nivel proceso.
+- **`/update-config`**: Gestion de configuracion y hooks.
+
+### Como Usar
+
+Invocacion directa:
 
 ```text
-/ui-ux-pro-max
+/review
 ```
 
-Esta skill se tiene en cuenta para construir, revisar y mejorar interfaces: landing pages, dashboards, SaaS, admin panels, e-commerce, portfolios, componentes, responsive design, accesibilidad, colores, tipografia, animaciones, formularios y charts.
-
-Tambien puedes invocarla con contexto:
+Con contexto:
 
 ```text
-/ui-ux-pro-max revisa este dashboard y mejora la jerarquia visual
+/review revisa este PR y busca problemas de seguridad
 ```
 
-La integracion esta inspirada en `nextlevelbuilder/ui-ux-pro-max-skill` y adaptada como prompt interno bundled para que cualquier instalacion global de Claudex la tenga disponible sin instalar plugins aparte.
+```text
+/test genera tests para el modulo de autenticacion
+```
+
+```text
+/architecture disena el sistema de pagos
+```
 
 ## Modelo Y Esfuerzo
 

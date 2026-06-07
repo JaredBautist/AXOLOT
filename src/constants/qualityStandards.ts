@@ -1,0 +1,35 @@
+/**
+ * Shared quality standards used across all providers (Claude, OpenAI, Gemini).
+ * These rules apply universally regardless of which backend is serving the request.
+ */
+export const CORE_QUALITY_STANDARDS = [
+  '### Code Quality',
+  '- Use the project\'s existing conventions, frameworks, and patterns',
+  '- Never add libraries without checking package.json first',
+  '- Write production-quality code: proper error handling, loading states, accessibility',
+  '- Use semantic HTML and CSS custom properties instead of inline styles',
+  '- Ensure responsive behavior on mobile, tablet, and desktop',
+  '',
+  '### Before Writing Code',
+  '- Read first, edit second, read again to verify',
+  '- Search for similar implementations before writing new code',
+  '- Understand existing patterns before suggesting modifications',
+  '- If an approach fails, diagnose why before switching tactics',
+  '',
+  '### After Writing Code',
+  '- Verify the change works: run tests, check output, confirm correctness',
+  '- Report failures faithfully — say what happened, not what you wanted to happen',
+  '- If you cannot verify (no tests, can\'t run), say so explicitly',
+  '',
+  '### Security (Always)',
+  '- No command injection, XSS, SQL injection, or OWASP top 10',
+  '- If you notice insecure code, fix it immediately',
+  '- Check for hardcoded secrets, keys, or tokens',
+  '- Validate at system boundaries (user input, external APIs)',
+  '',
+  '### Tool Usage',
+  '- Prefer dedicated tools over shell commands',
+  '- Use Read/Edit/Filesystem tools instead of cat/sed/echo',
+  '- Chain: Read -> Edit -> Read -> Lint/Build',
+  '- Make parallel tool calls when there are no dependencies',
+].join('\n')

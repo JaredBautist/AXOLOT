@@ -13,6 +13,7 @@ import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
 import { CODEX_FRONTEND_MASTER_PROMPT } from '../../skills/bundled/codexFrontendMaster.js'
 import { UI_UX_PRO_MAX_PROMPT } from '../../skills/bundled/uiUxProMax.js'
+import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
@@ -352,12 +353,9 @@ async function* streamOpenAIResponses(
           yield { type: 'event', event: onChunk(event.delta) }
         }
         if (event.type === 'response.function_call_arguments.delta') {
-          const id = String(event.item_id || event.output_index || randomUUID())
-          const existing = toolCallChunks.get(id) ?? {
-            id,
-            name: String(event.name || ''),
-            arguments: '',
-          }
+          const id = String(event.item_id || '')
+          if (!id) continue
+          const existing = toolCallChunks.get(id) ?? { id, name: '', arguments: '' }
           existing.arguments += String(event.delta || '')
           toolCallChunks.set(id, existing)
         } else if (
@@ -365,12 +363,9 @@ async function* streamOpenAIResponses(
             event.type === 'response.output_item.done') &&
           event.item?.type === 'function_call'
         ) {
-          const id = String(event.item.id || event.output_index || randomUUID())
-          const existing = toolCallChunks.get(id) ?? {
-            id,
-            name: '',
-            arguments: '',
-          }
+          const id = String(event.item.id || '')
+          if (!id) continue
+          const existing = toolCallChunks.get(id) ?? { id, name: '', arguments: '' }
           if (event.item.name) existing.name = String(event.item.name)
           if (event.type === 'response.output_item.done') {
             existing.arguments = String(event.item.arguments || existing.arguments)
@@ -384,9 +379,9 @@ async function* streamOpenAIResponses(
   }
 
   const toolCalls = [...toolCallChunks.values()]
-    .filter(call => call.name)
+    .filter(call => call.name && call.id)
     .map(call => ({
-      id: call.id || randomUUID(),
+      id: call.id,
       name: call.name,
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
@@ -464,39 +459,47 @@ function messagesToOpenAIChat(messages: Message[]): Array<Record<string, unknown
 }
 
 function messagesToOpenAIResponses(messages: Message[]): Array<Record<string, unknown>> {
-  return messages.flatMap(message => {
+  const functionCallIds = new Set<string>()
+
+  const items = messages.flatMap(message => {
     const role = (message as any).message?.role
     if (role !== 'user' && role !== 'assistant') return []
     const content = (message as any).message?.content
 
     if (role === 'assistant') {
       const text = contentToText(content)
-      const items: Record<string, unknown>[] = []
-      if (text) items.push({ role: 'assistant', content: text })
+      const result: Record<string, unknown>[] = []
+      if (text) result.push({ role: 'assistant', content: text })
       for (const call of contentToToolCalls(content)) {
-        items.push({
+        const callId = String(call.id)
+        functionCallIds.add(callId)
+        result.push({
           type: 'function_call',
-          call_id: call.id,
+          call_id: callId,
           name: (call.function as any).name,
           arguments: (call.function as any).arguments,
         })
       }
-      return items
+      return result
     }
 
     const toolResults = contentToToolResults(content)
     if (toolResults.length > 0) {
-      return toolResults.map(result => ({
-        type: 'function_call_output',
-        call_id: result.id,
-        output: result.output,
-      }))
+      return toolResults
+        .filter(result => functionCallIds.has(result.id))
+        .map(result => ({
+          type: 'function_call_output',
+          call_id: result.id,
+          output: result.output,
+        }))
     }
 
     const text = contentToText(content)
     if (!text) return []
     return [{ role: 'user', content: text }]
   })
+
+  return items
 }
 
 function messagesToGemini(messages: Message[]): Array<Record<string, unknown>> {
@@ -568,10 +571,11 @@ function contentToToolCalls(content: unknown): Array<Record<string, unknown>> {
         block &&
         typeof block === 'object' &&
         (block as any).type === 'tool_use' &&
-        (block as any).name,
+        (block as any).name &&
+        (block as any).id,
     )
     .map(block => ({
-      id: String((block as any).id || randomUUID()),
+      id: String((block as any).id),
       type: 'function',
       function: {
         name: String((block as any).name),
@@ -785,42 +789,39 @@ function nativeSystemPrompt(
   const providerName = provider === 'openai' ? 'OpenAI' : 'Gemini'
   const identity = `You are Claudex, a terminal AI assistant powered by ${providerName}. You are running inside Claudex — a TUI that gives you access to every enabled CLI tool listed in the tool schema, including file tools, shell tools, editing tools, search tools, agents, and skill/internal-prompt tools. When a task requires reading files, executing terminal commands, creating folders, editing files, inspecting the workspace, using an internal prompt, or applying a bundled skill, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.`
 
-  const claudeQualityInstructions = [
-    '## Quality Standards (Claude Code Level)',
-    '',
-    'Before writing code, always research the codebase first. Use Grep or Glob to understand the project structure, existing patterns, and conventions. Do not guess or assume.',
-    '',
-    '### Plan Mode (Always On)',
-    'Before implementing anything non-trivial:',
-    '1. Explore the project structure (Glob)',
-    '2. Read relevant files to understand existing patterns',
-    '3. Search for similar implementations (Grep)',
-    '4. Only then write code',
-    '',
-    '### Tool Chaining',
-    '- Read first, edit second, read again to verify',
-    '- When you need to understand a component, read its file AND its imports',
-    '- After editing, always read the file back to verify the edit was correct',
-    '- Chain: Read -> Edit -> Read -> Lint/Build',
-    '',
-    '### Code Quality',
-    '- Use the project\'s existing conventions, frameworks, and patterns',
-    '- Never add libraries without checking package.json first',
-    '- Write production-quality code: proper error handling, loading states, accessibility',
-    '- Use semantic HTML and CSS custom properties instead of inline styles',
-    '- Ensure responsive behavior on mobile, tablet, and desktop',
-    '',
-    '### When You Need Help',
-    '- Use /debug when debugging session issues',
-    '- Use /simplify to review code for quality and efficiency',
-    '- Use AskUserQuestion when you need clarification',
-    '',
-    '### Destructive Operations',
-    '- Always read a file before editing it',
-    '- Prefer Edit tool over Write for small changes (Edit is reversible)',
-    '- Use Bash only when no dedicated tool exists for the task',
-    '- Ask before running destructive terminal commands',
-  ].join('\n')
+  const providerSpecificTips =
+    provider === 'openai'
+      ? `\n\n### OpenAI-Specific Tips\n- Set \`strict: true\` on structured output schemas for reliable JSON parsing\n- Response format: prefer concise, structured responses\n- OpenAI models benefit from explicit step-by-step reasoning in tool selection`
+      : `\n\n### Gemini-Specific Tips\n- Gemini works best with clear, flat tool schemas (avoid deep nesting)\n- Include explicit examples in tool descriptions for better tool selection\n- Gemini performs well with parallel tool calls — maximize parallelism`
+
+  const qualityPrompt =
+    `\n\n## Quality Standards (Claude Code Level)\n\n` +
+    `${CORE_QUALITY_STANDARDS}` +
+    `\n\n### Plan Mode (Always On)\n` +
+    `Before implementing anything non-trivial:\n` +
+    `1. Explore the project structure (Glob)\n` +
+    `2. Read relevant files to understand existing patterns\n` +
+    `3. Search for similar implementations (Grep)\n` +
+    `4. Only then write code\n` +
+    `\n### Tool Chaining\n` +
+    `- Read first, edit second, read again to verify\n` +
+    `- When you need to understand a component, read its file AND its imports\n` +
+    `- After editing, always read the file back to verify the edit was correct\n` +
+    `- Chain: Read -> Edit -> Read -> Lint/Build` +
+    providerSpecificTips +
+    `\n\n### When You Need Help\n` +
+    `- Use /debug when debugging session issues\n` +
+    `- Use /simplify to review code for quality and efficiency\n` +
+    `- Use /review for PR-level code review\n` +
+    `- Use /test to write and run tests\n` +
+    `- Use /architecture for system design decisions\n` +
+    `- Use /refactor for safe multi-step refactoring\n` +
+    `- Use AskUserQuestion when you need clarification\n` +
+    `\n### Destructive Operations\n` +
+    `- Always read a file before editing it\n` +
+    `- Prefer Edit tool over Write for small changes (Edit is reversible)\n` +
+    `- Use Bash only when no dedicated tool exists for the task\n` +
+    `- Ask before running destructive terminal commands`
 
   const frontendStandardsPrompt =
     `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
@@ -834,7 +835,7 @@ function nativeSystemPrompt(
     return [
       identity,
       staticPart,
-      claudeQualityInstructions + frontendStandardsPrompt,
+      qualityPrompt + frontendStandardsPrompt,
       dynamicPart,
     ]
       .filter(Boolean)

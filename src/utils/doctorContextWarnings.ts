@@ -19,6 +19,8 @@ import { plural } from './stringUtils.js'
 
 // Thresholds (matching status notices and existing patterns)
 const MCP_TOOLS_THRESHOLD = 25_000 // 15k tokens
+const CUSTOM_AGENTS_WARN_THRESHOLD = 10
+const CUSTOM_AGENTS_ERROR_THRESHOLD = 25
 
 export type ContextWarning = {
   type:
@@ -26,6 +28,7 @@ export type ContextWarning = {
     | 'agent_descriptions'
     | 'mcp_tools'
     | 'unreachable_rules'
+    | 'custom_agents_count'
   severity: 'warning' | 'error'
   message: string
   details: string[]
@@ -38,6 +41,7 @@ export type ContextWarnings = {
   agentWarning: ContextWarning | null
   mcpWarning: ContextWarning | null
   unreachableRulesWarning: ContextWarning | null
+  customAgentsWarning: ContextWarning | null
 }
 
 async function checkClaudeMdFiles(): Promise<ContextWarning | null> {
@@ -241,6 +245,39 @@ async function checkUnreachableRules(
 }
 
 /**
+ * Check for too many custom agents
+ */
+async function checkCustomAgentCount(
+  agentInfo: AgentDefinitionsResult | null,
+): Promise<ContextWarning | null> {
+  if (!agentInfo) return null
+
+  const customAgents = agentInfo.activeAgents.filter(
+    a => a.source !== 'built-in',
+  )
+  const count = customAgents.length
+
+  if (count <= CUSTOM_AGENTS_WARN_THRESHOLD) return null
+
+  const details = customAgents
+    .slice(0, 10)
+    .map(a => `${a.agentType}: ~${roughTokenCountEstimation(a.whenToUse || '')} tokens`)
+
+  if (customAgents.length > 10) {
+    details.push(`(${customAgents.length - 10} more custom agents)`)
+  }
+
+  return {
+    type: 'custom_agents_count',
+    severity: count >= CUSTOM_AGENTS_ERROR_THRESHOLD ? 'error' : 'warning',
+    message: `${count} custom agents loaded (threshold: ${CUSTOM_AGENTS_WARN_THRESHOLD})`,
+    details,
+    currentValue: count,
+    threshold: CUSTOM_AGENTS_WARN_THRESHOLD,
+  }
+}
+
+/**
  * Check all context warnings for the doctor command
  */
 export async function checkContextWarnings(
@@ -248,18 +285,25 @@ export async function checkContextWarnings(
   agentInfo: AgentDefinitionsResult | null,
   getToolPermissionContext: () => Promise<ToolPermissionContext>,
 ): Promise<ContextWarnings> {
-  const [claudeMdWarning, agentWarning, mcpWarning, unreachableRulesWarning] =
-    await Promise.all([
-      checkClaudeMdFiles(),
-      checkAgentDescriptions(agentInfo),
-      checkMcpTools(tools, getToolPermissionContext, agentInfo),
-      checkUnreachableRules(getToolPermissionContext),
-    ])
+  const [
+    claudeMdWarning,
+    agentWarning,
+    mcpWarning,
+    unreachableRulesWarning,
+    customAgentsWarning,
+  ] = await Promise.all([
+    checkClaudeMdFiles(),
+    checkAgentDescriptions(agentInfo),
+    checkMcpTools(tools, getToolPermissionContext, agentInfo),
+    checkUnreachableRules(getToolPermissionContext),
+    checkCustomAgentCount(agentInfo),
+  ])
 
   return {
     claudeMdWarning,
     agentWarning,
     mcpWarning,
     unreachableRulesWarning,
+    customAgentsWarning,
   }
 }
