@@ -60,6 +60,8 @@ import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 // Dead code elimination: conditional imports for feature-gated modules
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -232,6 +234,7 @@ function getSimpleDoingTasksSection(): string {
     `Avoid giving time estimates or predictions for how long tasks will take, whether for your own work or for users planning projects. Focus on what needs to be done, not how long it might take.`,
     `If an approach fails, diagnose why before switching tactics—read the error, check your assumptions, try a focused fix. Don't retry the identical action blindly, but don't abandon a viable approach after a single failure either. Escalate to the user with ${ASK_USER_QUESTION_TOOL_NAME} only when you're genuinely stuck after investigation, not as a first response to friction.`,
     `Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it. Prioritize writing safe, secure, and correct code.`,
+    `Spec-Driven Development: Before implementing non-trivial work, check if .claudex/SPEC.md exists and read it for requirements, design, and task definitions. If it doesn't exist, offer to run /spec init or create a lightweight spec. Keep the spec in sync with actual implementation — update requirements as you discover them, mark tasks done as you complete them, log session summaries to .claudex/memory/.`,
     ...codeStyleSubitems,
     `Avoid backwards-compatibility hacks like renaming unused _vars, re-exporting types, adding // removed comments for removed code, etc. If you are certain that something is unused, you can delete it completely.`,
     // @[MODEL LAUNCH]: False-claims mitigation for Capybara v8 (29-30% FC rate vs v4's 16.7%)
@@ -524,6 +527,15 @@ ${CYBER_RISK_INSTRUCTION}`,
       'summarize_tool_results',
       () => SUMMARIZE_TOOL_RESULTS_SECTION,
     ),
+    systemPromptSection('project_spec', () => {
+      try {
+        const specPath = join(getCwd(), '.claudex', 'SPEC.md')
+        const content = readFileSync(specPath, 'utf-8')
+        return `## Project Spec Context\n\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``
+      } catch {
+        return null
+      }
+    }),
     // Numeric length anchors — research shows ~1.2% output token reduction vs
     // qualitative "be concise".
     systemPromptSection(

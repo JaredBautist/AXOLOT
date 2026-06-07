@@ -16,6 +16,9 @@ import { registerArchitectureSkill } from './architecture.js'
 import { registerReviewSkill } from './review.js'
 import { registerRefactorSkill } from './refactor.js'
 import { registerDocsSkill } from './docs.js'
+import { registerCommitSkill } from './commit.js'
+import { registerOnboardSkill } from './onboard.js'
+import { registerSpecSkill } from './spec.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
 import { registerVerifySkill } from './verify.js'
 
@@ -46,6 +49,9 @@ export function initBundledSkills(): void {
   registerReviewSkill()
   registerRefactorSkill()
   registerDocsSkill()
+  registerCommitSkill()
+  registerOnboardSkill()
+  registerSpecSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')

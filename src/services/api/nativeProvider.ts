@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { setTimeout as sleep } from 'timers/promises'
 import type {
   AssistantMessage,
   Message,
@@ -226,17 +227,19 @@ async function* streamOpenAIChat(
   const { default: OpenAI } = await import('openai')
   const client = new OpenAI({ apiKey })
   const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
-  const stream = await client.chat.completions.create(
-    {
-      model,
-      stream: true,
-      messages: [
-        { role: 'system', content: nativeSystemPrompt(systemPrompt, 'openai') },
-        ...messagesToOpenAIChat(messages),
-      ],
-      ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-    },
-    { signal },
+  const stream = await retryOnTransient(async () =>
+    client.chat.completions.create(
+      {
+        model,
+        stream: true,
+        messages: [
+          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'openai') },
+          ...messagesToOpenAIChat(messages),
+        ],
+        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+      },
+      { signal },
+    ),
   )
 
   for await (const part of stream) {
@@ -315,17 +318,12 @@ async function* streamOpenAIResponses(
     ? 'https://chatgpt.com/backend-api/codex/responses'
     : 'https://api.openai.com/v1/responses'
 
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: 'POST',
     headers,
     body,
     signal,
   })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Responses API error (${response.status}): ${text}`)
-  }
 
   const reader = response.body?.getReader()
   if (!reader) throw new Error('No response body')
@@ -406,11 +404,13 @@ async function* streamGemini(
     systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini'),
     ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
   })
-  const result = await genModel.generateContentStream(
-    {
-      contents: messagesToGemini(messages),
-    },
-    { signal },
+  const result = await retryOnTransient(() =>
+    genModel.generateContentStream(
+      {
+        contents: messagesToGemini(messages),
+      },
+      { signal },
+    ),
   )
 
   const toolCalls: NativeToolCall[] = []
@@ -809,6 +809,17 @@ function nativeSystemPrompt(
     `- After editing, always read the file back to verify the edit was correct\n` +
     `- Chain: Read -> Edit -> Read -> Lint/Build` +
     providerSpecificTips +
+    `\n\n### Skill Auto-Selection (Important)\n` +
+    `When the user's request matches a skill's purpose, invoke that skill BY DEFAULT without asking permission. Examples:\n` +
+    `- User asks to "test this" or "run the tests" → call /test automatically\n` +
+    `- User asks to "review my code" or "review this PR" → call /review automatically\n` +
+    `- User asks to "refactor X" → call /refactor automatically\n` +
+    `- User asks "how should I structure..." or "architect this" → call /architecture automatically\n` +
+    `- User asks for "docs" or "documentation" → call /docs automatically\n` +
+    `- User asks to "commit" or "write a commit message" → call /commit automatically\n` +
+    `- User seems new ("first time", "how to setup", "getting started") → call /onboard automatically\n` +
+    `- User pushes or wants to commit → call /commit automatically\n` +
+    `- User asks about project structure, specs, or requirements → call /spec automatically` +
     `\n\n### When You Need Help\n` +
     `- Use /debug when debugging session issues\n` +
     `- Use /simplify to review code for quality and efficiency\n` +
@@ -816,6 +827,9 @@ function nativeSystemPrompt(
     `- Use /test to write and run tests\n` +
     `- Use /architecture for system design decisions\n` +
     `- Use /refactor for safe multi-step refactoring\n` +
+    `- Use /spec for Spec-Driven Development (requirements, design, tasks, project memory)\n` +
+    `- Use /commit for conventional commits and changelog\n` +
+    `- Use /onboard for new user setup\n` +
     `- Use AskUserQuestion when you need clarification\n` +
     `\n### Destructive Operations\n` +
     `- Always read a file before editing it\n` +
@@ -869,7 +883,47 @@ function limitNativeHistory(messages: Message[]): Message[] {
     DEFAULT_NATIVE_HISTORY_MESSAGES,
   )
   if (messages.length <= limit) return messages
-  return messages.slice(-limit)
+
+  // Compression: summarize old turns (everything before the last 10 messages)
+  const keepFresh = 10
+  const oldMessages = messages.slice(0, -keepFresh)
+  const freshMessages = messages.slice(-keepFresh)
+
+  const summary = compressHistory(oldMessages, keepFresh)
+  if (!summary) return messages.slice(-limit)
+
+  const compressedMsg = {
+    message: {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: `[Earlier conversation summary: ${summary}]`,
+        },
+      ],
+    },
+  } as unknown as Message
+  return [compressedMsg, ...freshMessages].slice(-limit)
+}
+
+function compressHistory(messages: Message[], maxTurns: number): string | null {
+  // Focus on user requests and assistant text content — skip tool noise
+  const entries: string[] = []
+  for (const msg of messages.slice(-maxTurns)) {
+    const role = (msg as any).message?.role
+    const content = (msg as any).message?.content
+    if (!content || !Array.isArray(content)) continue
+    for (const block of content) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        const text = block.text.trim()
+        if (text.length > 0) {
+          entries.push(`${role}: ${text.slice(0, 200)}`)
+        }
+      }
+    }
+  }
+  if (entries.length === 0) return null
+  return entries.join(' | ').slice(0, 2000)
 }
 
 function compactNativeToolDescription(description: string | undefined): string | undefined {
@@ -895,7 +949,106 @@ function truncateNativeToolResult(output: string): string {
     DEFAULT_NATIVE_TOOL_RESULT_CHARS,
   )
   if (output.length <= limit) return output
-  return `${output.slice(0, limit)}\n\n[Claudex truncated this tool result for native-provider speed/token usage. Use Read with offset/limit or a narrower command if more content is needed.]`
+
+  // Smart truncation: try to preserve structure (JSON arrays/objects, key sections)
+  const truncated = output.slice(0, limit)
+
+  // If it looks like JSON, try to close the outer structure
+  if (output.trimStart().startsWith('[')) {
+    const lastBracket = truncated.lastIndexOf('}')
+    if (lastBracket > limit * 0.5) {
+      return `${truncated.slice(0, lastBracket + 1)}\n  // ... ${output.length - limit} more items truncated\n]`
+    }
+  }
+  if (output.trimStart().startsWith('{')) {
+    const lastField = truncated.lastIndexOf('",')
+    if (lastField > limit * 0.5) {
+      return `${truncated.slice(0, lastField + 2)}\n  // ... ${output.length - limit} more fields truncated\n}`
+    }
+  }
+
+  // Multi-line: keep first + last sections, collapse middle
+  const lines = truncated.split('\n')
+  if (lines.length > 10) {
+    const firstPart = lines.slice(0, 5).join('\n')
+    const lastPart = lines.slice(-5).join('\n')
+    return `${firstPart}\n  ...[${output.length - limit} more chars truncated]...\n${lastPart}`
+  }
+
+  // Fallback: plain truncation with context hint
+  return `${truncated}\n\n[Claudex truncated this tool result for speed/token usage (${output.length} chars total, showing first ${limit}). Use Read with offset/limit or a narrower command if more content is needed.]`
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit & { signal: AbortSignal },
+  maxRetries = 2,
+): Promise<Response> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      if (response.ok) return response
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 10_000)
+          await sleep(delay)
+          continue
+        }
+      }
+      const text = await response.text()
+      throw new Error(`Responses API error (${response.status}): ${text}`)
+    } catch (e) {
+      if (options.signal?.aborted) throw e
+      if (e instanceof Error && e.message?.includes('Responses API error')) throw e
+      lastError = e instanceof Error ? e : new Error(String(e))
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 10_000)
+        await sleep(delay)
+        continue
+      }
+    }
+  }
+  throw lastError || new Error('fetchWithRetry failed')
+}
+
+async function retryOnTransient<T>(
+  fn: () => Promise<T>,
+  maxRetries = 2,
+): Promise<T> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      if (!isTransientError(lastError)) throw e
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 10_000)
+        await sleep(delay)
+      }
+    }
+  }
+  throw lastError || new Error('retryOnTransient failed')
+}
+
+function isTransientError(e: Error): boolean {
+  const msg = e.message || ''
+  return (
+    msg.includes('429') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504') ||
+    msg.includes('rate_limit') ||
+    msg.includes('timeout') ||
+    msg.includes('Too Many Requests') ||
+    msg.includes('Service Unavailable') ||
+    msg.includes('Internal Server Error') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('socket hang up')
+  )
 }
 
 function readPositiveIntEnv(name: string, fallback: number): number {

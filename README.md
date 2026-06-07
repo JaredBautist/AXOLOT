@@ -82,16 +82,22 @@ Ambos se cargan automaticamente al iniciar la sesion. Incluye todos los estandar
 - **`/test`**: Escribe y ejecuta tests — analiza el codigo, identifica el framework, genera tests unit/integration/e2e con objetivos de cobertura.
 - **`/refactor`**: Refactoring multi-step seguro: analiza → planifica → ejecuta paso a paso → valida. Incluye patrones (extract module, split function, migrate pattern) y anti-patrones.
 
+### Especificacion y Proyecto
+
+- **`/spec`**: Spec-Driven Development — crea y gestiona `.claudex/` con requirements, design, tasks y session memory. Usa `/spec init` para arrancar un nuevo proyecto, `/spec update` para sincronizar specs con el codigo real.
+
 ### Diseno y Documentacion
 
 - **`/architecture`**: Diseno de sistemas, Architecture Decision Records (ADRs), analisis de trade-offs, diagramas mermaid. Checklist de escalabilidad, reliability, seguridad, costo, performance.
 - **`/docs`**: Genera y actualiza documentacion: README, API docs, changelogs (keepachangelog), contributing guides.
+- **`/commit`**: Genera mensajes Conventional Commit y mantiene CHANGELOG basado en el diff del repo.
 
 ### Productividad
 
 - **`/simplify`**: Revision paralela de codigo con 3 agentes (reuso, calidad, eficiencia).
 - **`/debug`**: Diagnostico de sesiones — lee logs de debug y resuelve problemas de la TUI.
 - **`/remember`**: Revision y promocion de memoria (CLAUDE.md).
+- **`/onboard`**: Guia interactiva de primeros pasos — configuracion de provider, autenticacion, seleccion de modelo, descubrimiento de skills.
 - **`/batch`**: Orquestacion de trabajo en paralelo a gran escala.
 - **`/stuck`**: Investigacion diagnostica a nivel proceso.
 - **`/update-config`**: Gestion de configuracion y hooks.
