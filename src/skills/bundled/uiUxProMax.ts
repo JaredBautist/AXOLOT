@@ -1,6 +1,6 @@
 import { registerBundledSkill } from '../bundledSkills.js'
 
-const UI_UX_PRO_MAX_PROMPT = `# UI/UX Pro Max
+export const UI_UX_PRO_MAX_PROMPT = `# UI/UX Pro Max
 
 You are using the UI/UX Pro Max design intelligence skill, adapted for Claudex as a bundled frontend skill.
 

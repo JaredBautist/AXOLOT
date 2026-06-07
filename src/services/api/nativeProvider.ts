@@ -11,6 +11,8 @@ import { toolToAPISchema } from '../../utils/api.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
+import { CODEX_FRONTEND_MASTER_PROMPT } from '../../skills/bundled/codexFrontendMaster.js'
+import { UI_UX_PRO_MAX_PROMPT } from '../../skills/bundled/uiUxProMax.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
@@ -805,12 +807,10 @@ function nativeSystemPrompt(
     '- Use the project\'s existing conventions, frameworks, and patterns',
     '- Never add libraries without checking package.json first',
     '- Write production-quality code: proper error handling, loading states, accessibility',
-    '- For frontend: follow the /codex-frontend-master skill standards for design, typography, color, animations, and accessibility',
     '- Use semantic HTML and CSS custom properties instead of inline styles',
     '- Ensure responsive behavior on mobile, tablet, and desktop',
     '',
     '### When You Need Help',
-    '- Use /ui-ux-pro-max or /codex-frontend-master for frontend design decisions',
     '- Use /debug when debugging session issues',
     '- Use /simplify to review code for quality and efficiency',
     '- Use AskUserQuestion when you need clarification',
@@ -822,12 +822,21 @@ function nativeSystemPrompt(
     '- Ask before running destructive terminal commands',
   ].join('\n')
 
+  const frontendStandardsPrompt =
+    `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
+    `${CODEX_FRONTEND_MASTER_PROMPT}\n\n${UI_UX_PRO_MAX_PROMPT}`
+
   // Process dynamic boundary: split into static prefix + dynamic suffix
   const boundaryIdx = systemPrompt.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY)
   if (boundaryIdx !== -1) {
     const staticPart = systemPrompt.slice(0, boundaryIdx).join('\n\n')
     const dynamicPart = systemPrompt.slice(boundaryIdx + 1).join('\n\n')
-    return [identity, staticPart, claudeQualityInstructions, dynamicPart]
+    return [
+      identity,
+      staticPart,
+      claudeQualityInstructions + frontendStandardsPrompt,
+      dynamicPart,
+    ]
       .filter(Boolean)
       .join('\n\n')
   }
@@ -835,7 +844,7 @@ function nativeSystemPrompt(
   return [
     identity,
     ...systemPrompt,
-    claudeQualityInstructions,
+    claudeQualityInstructions + frontendStandardsPrompt,
   ]
     .filter(Boolean)
     .join('\n\n')

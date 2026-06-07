@@ -1,6 +1,7 @@
 import { registerBundledSkill } from '../bundledSkills.js'
+import { UI_UX_PRO_MAX_PROMPT } from './uiUxProMax.js'
 
-const CODEX_FRONTEND_MASTER_PROMPT = `# CODEX FRONTEND MASTER — Sistema de Calidad Claude Code
+export const CODEX_FRONTEND_MASTER_PROMPT = `# CODEX FRONTEND MASTER — Sistema de Calidad Claude Code
 
 > Este documento define el estándar absoluto de calidad para generación de frontend.
 > Aplica TODO lo que está aquí antes de escribir una sola línea de código UI.
@@ -730,7 +731,7 @@ export function registerCodexFrontendMasterSkill(): void {
     aliases: ['frontend', 'frontend-master', 'fe'],
     userInvocable: true,
     async getPromptForCommand(args) {
-      const parts = [CODEX_FRONTEND_MASTER_PROMPT]
+      const parts = [CODEX_FRONTEND_MASTER_PROMPT, UI_UX_PRO_MAX_PROMPT]
       if (args) {
         parts.push(`\n## User Request\n\n${args}`)
       }
