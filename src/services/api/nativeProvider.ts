@@ -824,6 +824,7 @@ function nativeSystemPrompt(
     `- Task involves frontend → MUST call /codex-frontend-master or /frontend-design first\n` +
     `- User asks to set project rules → MUST call /instructions first\n` +
     `- User says "continue where I left off" → MUST call /session first\n` +
+    `- User asks Claudex to learn, remember routing lessons, or improve skill suggestions → MUST call /learn first\n` +
     `- User asks to check Claudex itself → MUST call /self-test first` +
     `\n\n### When You Need Help\n` +
     `- /debug — debugging session issues\n` +
@@ -835,6 +836,7 @@ function nativeSystemPrompt(
     `- /spec — Spec-Driven Development (requirements, design, tasks)\n` +
     `- /instructions — manage custom project rules in .claudex/instructions/\n` +
     `- /session — save/resume session state across sessions\n` +
+    `- /learn — manage adaptive learning, RAG memory, and smart skill routing\n` +
     `- /commit — conventional commits and changelog\n` +
     `- /onboard — new user setup\n` +
     `- /self-test — run Claudex's own quality checks\n` +

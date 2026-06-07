@@ -6,6 +6,7 @@ import {
   getCommandName,
 } from '../../commands.js'
 import type { SuggestionItem } from '../../components/PromptInput/PromptInputFooterSuggestions.js'
+import { suggestSkillsForQuery } from '../../services/learning/learningEngine.js'
 import { getSkillUsageScore } from './skillUsageTracking.js'
 
 // Treat these characters as word separators for command search
@@ -308,6 +309,12 @@ export function generateCommandSuggestions(
   // When just typing '/' without additional text
   if (query === '') {
     const visibleCommands = commands.filter(cmd => !cmd.isHidden)
+    const learnedSuggestions = suggestSkillsForQuery(
+      'general task',
+      visibleCommands,
+      undefined,
+      5,
+    ).map(item => item.command)
 
     // Find recently used skills (only prompt commands have usage tracking)
     const recentlyUsed: Command[] = []
@@ -326,9 +333,10 @@ export function generateCommandSuggestions(
     }
 
     // Create a set of recently used command IDs to avoid duplicates
-    const recentlyUsedIds = new Set(recentlyUsed.map(cmd => getCommandId(cmd)))
+    const prioritized = uniqueCommands([...learnedSuggestions, ...recentlyUsed])
+    const prioritizedIds = new Set(prioritized.map(cmd => getCommandId(cmd)))
 
-    // Categorize remaining commands (excluding recently used)
+    // Categorize remaining commands (excluding learned/recently used)
     const builtinCommands: Command[] = []
     const userCommands: Command[] = []
     const projectCommands: Command[] = []
@@ -336,8 +344,8 @@ export function generateCommandSuggestions(
     const otherCommands: Command[] = []
 
     visibleCommands.forEach(cmd => {
-      // Skip if already in recently used
-      if (recentlyUsedIds.has(getCommandId(cmd))) {
+      // Skip if already prioritized
+      if (prioritizedIds.has(getCommandId(cmd))) {
         return
       }
 
@@ -370,7 +378,7 @@ export function generateCommandSuggestions(
     // Combine with built-in commands prioritized after recently used,
     // so they remain visible even when many skills are installed
     return [
-      ...recentlyUsed,
+      ...prioritized,
       ...builtinCommands,
       ...userCommands,
       ...projectCommands,
@@ -402,6 +410,12 @@ export function generateCommandSuggestions(
 
   const fuse = getCommandFuse(commands)
   const searchResults = fuse.search(query)
+  const learnedById = new Map(
+    suggestSkillsForQuery(query, commands, undefined, 10).map(item => [
+      getCommandId(item.command),
+      item.score,
+    ]),
+  )
 
   // Sort results prioritizing exact/prefix command name matches over fuzzy description matches
   // Priority order:
@@ -463,10 +477,16 @@ export function generateCommandSuggestions(
       return aPrefixAlias.length - bPrefixAlias.length
     }
 
-    // For similar match types, use Fuse score with usage as tiebreaker
+    const aLearned = getLearnedSkillScore(a.r.item.command, learnedById)
+    const bLearned = getLearnedSkillScore(b.r.item.command, learnedById)
+
+    // For similar match types, use Fuse score with learned routing as tiebreaker
     const scoreDiff = (a.r.score ?? 0) - (b.r.score ?? 0)
     if (Math.abs(scoreDiff) > 0.1) {
       return scoreDiff
+    }
+    if (Math.abs(aLearned - bLearned) > 0.05) {
+      return bLearned - aLearned
     }
     // For similar Fuse scores, prefer more frequently used skills
     return b.usage - a.usage
@@ -495,6 +515,24 @@ export function generateCommandSuggestions(
     }
   }
   return fuseSuggestions
+}
+
+function uniqueCommands(commands: Command[]): Command[] {
+  const seen = new Set<string>()
+  return commands.filter(command => {
+    const id = getCommandId(command)
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+function getLearnedSkillScore(
+  command: Command,
+  learnedById: Map<string, number>,
+): number {
+  if (command.type !== 'prompt') return 0
+  return learnedById.get(getCommandId(command)) ?? 0
 }
 
 /**

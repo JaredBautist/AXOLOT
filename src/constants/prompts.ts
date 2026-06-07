@@ -58,6 +58,7 @@ import { SLEEP_TOOL_NAME } from '../tools/SleepTool/prompt.js'
 import { TICK_TAG } from './xml.js'
 import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
+import { buildLearningSystemSection } from '../services/learning/learningEngine.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -587,6 +588,9 @@ ${CYBER_RISK_INSTRUCTION}`,
         return null
       }
     }),
+    systemPromptSection('learning_profile', () =>
+      buildLearningSystemSection(getCwd()),
+    ),
     // Numeric length anchors — research shows ~1.2% output token reduction vs
     // qualitative "be concise".
     systemPromptSection(

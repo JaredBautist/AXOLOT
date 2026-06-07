@@ -1,4 +1,6 @@
 import { getGlobalConfig, saveGlobalConfig } from '../config.js'
+import { recordSkillLearning } from '../../services/learning/learningEngine.js'
+import { logForDebugging } from '../debug.js'
 
 const SKILL_USAGE_DEBOUNCE_MS = 60_000
 
@@ -19,6 +21,14 @@ export function recordSkillUsage(skillName: string): void {
     return
   }
   lastWriteBySkill.set(skillName, now)
+  try {
+    recordSkillLearning(skillName)
+  } catch (e) {
+    logForDebugging(
+      `Failed to record learning for skill ${skillName}: ${e instanceof Error ? e.message : String(e)}`,
+      { level: 'warn' },
+    )
+  }
   saveGlobalConfig(current => {
     const existing = current.skillUsage?.[skillName]
     return {
