@@ -60,7 +60,7 @@ import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Dead code elimination: conditional imports for feature-gated modules
@@ -233,6 +233,7 @@ function getSimpleDoingTasksSection(): string {
     `Do not create files unless they're absolutely necessary for achieving your goal. Generally prefer editing an existing file to creating a new one, as this prevents file bloat and builds on existing work more effectively.`,
     `Avoid giving time estimates or predictions for how long tasks will take, whether for your own work or for users planning projects. Focus on what needs to be done, not how long it might take.`,
     `If an approach fails, diagnose why before switching tactics—read the error, check your assumptions, try a focused fix. Don't retry the identical action blindly, but don't abandon a viable approach after a single failure either. Escalate to the user with ${ASK_USER_QUESTION_TOOL_NAME} only when you're genuinely stuck after investigation, not as a first response to friction.`,
+    `Error Recovery Protocol (MANDATORY): When a tool call fails, follow this process:\n1. Read the error message carefully — identify the actual cause\n2. Try a FIXED version (different params, not identical retry)\n3. If still failing, try an ALTERNATIVE approach (different tool, different method)\n4. If all approaches fail, escalate to the user with the error, what you tried, and what you recommend\nNEVER retry the exact same failing call more than once. NEVER silently give up.`,
     `Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it. Prioritize writing safe, secure, and correct code.`,
     `Spec-Driven Development: Before implementing non-trivial work, check if .claudex/SPEC.md exists and read it for requirements, design, and task definitions. If it doesn't exist, offer to run /spec init or create a lightweight spec. Keep the spec in sync with actual implementation — update requirements as you discover them, mark tasks done as you complete them, log session summaries to .claudex/memory/.`,
     ...codeStyleSubitems,
@@ -531,7 +532,57 @@ ${CYBER_RISK_INSTRUCTION}`,
       try {
         const specPath = join(getCwd(), '.claudex', 'SPEC.md')
         const content = readFileSync(specPath, 'utf-8')
-        return `## Project Spec Context\n\n\`\`\`\n${content.slice(0, 8000)}\n\`\`\``
+        return `## Project Spec\n\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``
+      } catch {
+        return null
+      }
+    }),
+    systemPromptSection('project_context', () => {
+      const root = getCwd()
+      const parts: string[] = []
+      try {
+        const pkg = readFileSync(join(root, 'package.json'), 'utf-8')
+        const parsed = JSON.parse(pkg)
+        const info = [`### Project Context (Auto-Detected)\n**Name**: ${parsed.name || 'unknown'}`]
+        if (parsed.description) info.push(`**Description**: ${parsed.description}`)
+        if (parsed.version) info.push(`**Version**: ${parsed.version}`)
+        if (parsed.scripts) info.push(`**Scripts**: ${Object.keys(parsed.scripts).join(', ')}`)
+        if (parsed.dependencies) info.push(`**Deps**: ${Object.keys(parsed.dependencies).length}`)
+        if (parsed.devDependencies) info.push(`**DevDeps**: ${Object.keys(parsed.devDependencies).length}`)
+        parts.push(info.join('\n'))
+      } catch {}
+      try {
+        const readme = readFileSync(join(root, 'README.md'), 'utf-8')
+        const firstLines = readme.split('\n').slice(0, 20).join('\n')
+        parts.push(`**README (first 20 lines)**:\n${firstLines.slice(0, 2000)}`)
+      } catch {}
+      return parts.length > 0 ? parts.join('\n\n') : null
+    }),
+    systemPromptSection('project_instructions', () => {
+      const instrDir = join(getCwd(), '.claudex', 'instructions')
+      try {
+        const files = readdirSync(instrDir).filter(f => f.endsWith('.md'))
+        if (files.length === 0) return null
+        const parts = files.map(f => {
+          const content = readFileSync(join(instrDir, f), 'utf-8')
+          return `### ${f.replace(/\.md$/, '')}\n${content.trim().slice(0, 2000)}`
+        })
+        return `## Project Instructions\n\n${parts.join('\n\n')}`
+      } catch {
+        return null
+      }
+    }),
+    systemPromptSection('session_state', () => {
+      try {
+        const sessionPath = join(getCwd(), '.claudex', 'session.json')
+        const content = readFileSync(sessionPath, 'utf-8')
+        const state = JSON.parse(content)
+        const lines: string[] = ['## Previous Session State\n']
+        if (state.task) lines.push(`**Task**: ${state.task}`)
+        if (state.files?.length) lines.push(`**Files**: ${Array.isArray(state.files) ? state.files.join(', ') : state.files}`)
+        if (state.context) lines.push(`**Context**: ${state.context}`)
+        if (state.focus) lines.push(`**Focus**: ${state.focus}`)
+        return lines.join('\n')
       } catch {
         return null
       }

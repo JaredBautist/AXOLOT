@@ -1,5 +1,6 @@
 import { registerBundledSkill } from '../bundledSkills.js'
 import { UI_UX_PRO_MAX_PROMPT } from './uiUxProMax.js'
+import { FRONTEND_DESIGN_PROMPT } from './frontendDesign.js'
 
 export const CODEX_FRONTEND_MASTER_PROMPT = `# CODEX FRONTEND MASTER — Sistema de Calidad Claude Code
 
@@ -39,35 +40,28 @@ Solo después de responder esto, escribe código.
 
 ### ❌ NUNCA usar:
 - Inter, Roboto, Arial, system-ui, sans-serif genérico
+- Space Grotesk (el skill de Claude Code lo declara cliché de IA — prohibido)
 - Combinaciones predecibles (Inter + Inter Bold)
 - Tamaños de fuente sin escala tipográfica
+- Converger siempre en la misma tipografía entre proyectos
 
-### ✅ SIEMPRE elegir fuentes con carácter:
+### ✅ SIEMPRE elegir fuentes con carácter (VARÍALAS entre proyectos):
 
-**Para interfaces modernas/tech:**
 \`\`\`css
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-\`\`\`
-
-**Para interfaces de lujo/premium:**
-\`\`\`css
+/* Ejemplo 1: Elegante / Editorial */
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Montserrat:wght@300;400;500&display=swap');
-\`\`\`
 
-**Para interfaces editoriales/creativas:**
-\`\`\`css
+/* Ejemplo 2: Creativo / Vibrante */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
-\`\`\`
 
-**Para interfaces brutales/bold:**
-\`\`\`css
+/* Ejemplo 3: Bold / Brutalista */
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+/* Ejemplo 4: Refinado / Limpio */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
 \`\`\`
 
-**Para interfaces minimalistas/elegantes:**
-\`\`\`css
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap');
-\`\`\`
+**CRÍTICO: NO uses Space Grotesk. NO uses Inter. NO uses Roboto. Varía la elección de tipografía entre cada proyecto.**
 
 ### Escala tipográfica obligatoria (clamp para responsivo):
 \`\`\`css
@@ -674,7 +668,22 @@ EXPERIENCIA DE USUARIO:
 
 ---
 
-## 13. PARA REACT ESPECÍFICAMENTE
+## 13. CALIDAD ARQUITECTÓNICA (OBLIGATORIO)
+
+1. **Cada componente su propio archivo** — nada de monolithic files de 300+ líneas
+2. **TypeScript obligatorio** a menos que el usuario diga explícitamente lo contrario
+3. **Estados loading/empty/error** en cada componente que muestre datos dinámicos
+4. **Validación de formularios** con mensajes de error claros y accesibles
+5. **Mobile-first responsive** en todos los proyectos
+6. **Dependencias pinneadas** — no \`"latest"\` en package.json
+7. **CSS variables** para todos los colores, espaciado y tipografía — cero magic numbers
+8. **Separación de responsabilidades**: componentes → pages → hooks → utils → styles → types
+9. **Data persistence**: localStorage/IndexedDB para apps client-side, nunca perder datos al refrescar
+10. **Error boundaries** envolviendo secciones principales
+
+---
+
+## 14. PARA REACT ESPECÍFICAMENTE
 
 ### Estructura de componente de calidad:
 \`\`\`jsx
@@ -731,7 +740,7 @@ export function registerCodexFrontendMasterSkill(): void {
     aliases: ['frontend', 'frontend-master', 'fe'],
     userInvocable: true,
     async getPromptForCommand(args) {
-      const parts = [CODEX_FRONTEND_MASTER_PROMPT, UI_UX_PRO_MAX_PROMPT]
+      const parts = [CODEX_FRONTEND_MASTER_PROMPT, UI_UX_PRO_MAX_PROMPT, FRONTEND_DESIGN_PROMPT]
       if (args) {
         parts.push(`\n## User Request\n\n${args}`)
       }

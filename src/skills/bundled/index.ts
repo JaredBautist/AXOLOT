@@ -10,6 +10,7 @@ import { registerSimplifySkill } from './simplify.js'
 import { registerSkillifySkill } from './skillify.js'
 import { registerStuckSkill } from './stuck.js'
 import { registerCodexFrontendMasterSkill } from './codexFrontendMaster.js'
+import { registerFrontendDesignSkill } from './frontendDesign.js'
 import { registerUiUxProMaxSkill } from './uiUxProMax.js'
 import { registerTestSkill } from './test.js'
 import { registerArchitectureSkill } from './architecture.js'
@@ -19,6 +20,9 @@ import { registerDocsSkill } from './docs.js'
 import { registerCommitSkill } from './commit.js'
 import { registerOnboardSkill } from './onboard.js'
 import { registerSpecSkill } from './spec.js'
+import { registerInstructionsSkill } from './instructions.js'
+import { registerSessionSkill } from './session.js'
+import { registerSelfTestSkill } from './selfTest.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
 import { registerVerifySkill } from './verify.js'
 
@@ -43,6 +47,7 @@ export function initBundledSkills(): void {
   registerBatchSkill()
   registerStuckSkill()
   registerCodexFrontendMasterSkill()
+  registerFrontendDesignSkill()
   registerUiUxProMaxSkill()
   registerTestSkill()
   registerArchitectureSkill()
@@ -52,6 +57,9 @@ export function initBundledSkills(): void {
   registerCommitSkill()
   registerOnboardSkill()
   registerSpecSkill()
+  registerInstructionsSkill()
+  registerSessionSkill()
+  registerSelfTestSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')

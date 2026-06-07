@@ -14,6 +14,7 @@ import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
 import { CODEX_FRONTEND_MASTER_PROMPT } from '../../skills/bundled/codexFrontendMaster.js'
 import { UI_UX_PRO_MAX_PROMPT } from '../../skills/bundled/uiUxProMax.js'
+import { FRONTEND_DESIGN_PROMPT } from '../../skills/bundled/frontendDesign.js'
 import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
 import Conf from 'conf'
 
@@ -809,28 +810,35 @@ function nativeSystemPrompt(
     `- After editing, always read the file back to verify the edit was correct\n` +
     `- Chain: Read -> Edit -> Read -> Lint/Build` +
     providerSpecificTips +
-    `\n\n### Skill Auto-Selection (Important)\n` +
-    `When the user's request matches a skill's purpose, invoke that skill BY DEFAULT without asking permission. Examples:\n` +
-    `- User asks to "test this" or "run the tests" → call /test automatically\n` +
-    `- User asks to "review my code" or "review this PR" → call /review automatically\n` +
-    `- User asks to "refactor X" → call /refactor automatically\n` +
-    `- User asks "how should I structure..." or "architect this" → call /architecture automatically\n` +
-    `- User asks for "docs" or "documentation" → call /docs automatically\n` +
-    `- User asks to "commit" or "write a commit message" → call /commit automatically\n` +
-    `- User seems new ("first time", "how to setup", "getting started") → call /onboard automatically\n` +
-    `- User pushes or wants to commit → call /commit automatically\n` +
-    `- User asks about project structure, specs, or requirements → call /spec automatically` +
+    `\n\n### Skill Execution (MANDATORY — NOT Optional)\n` +
+    `When the user's request matches a skill's purpose, you MUST execute that skill BEFORE writing code. This is required, not a suggestion. Do not skip skills. Do not implement directly without invoking the relevant skill first.\n\n` +
+    `Skill matching examples:\n` +
+    `- User asks "test this" or "run tests" → MUST call /test first\n` +
+    `- User asks "review my code" or "review this PR" → MUST call /review first\n` +
+    `- User asks "refactor X" → MUST call /refactor first\n` +
+    `- User asks "architect this" or "how should I structure" → MUST call /architecture first\n` +
+    `- User asks for "docs" or "documentation" → MUST call /docs first\n` +
+    `- User asks to "commit" or "write a commit message" → MUST call /commit first\n` +
+    `- User seems new ("first time", "getting started") → MUST call /onboard first\n` +
+    `- User asks about project structure, specs → MUST call /spec first\n` +
+    `- Task involves frontend → MUST call /codex-frontend-master or /frontend-design first\n` +
+    `- User asks to set project rules → MUST call /instructions first\n` +
+    `- User says "continue where I left off" → MUST call /session first\n` +
+    `- User asks to check Claudex itself → MUST call /self-test first` +
     `\n\n### When You Need Help\n` +
-    `- Use /debug when debugging session issues\n` +
-    `- Use /simplify to review code for quality and efficiency\n` +
-    `- Use /review for PR-level code review\n` +
-    `- Use /test to write and run tests\n` +
-    `- Use /architecture for system design decisions\n` +
-    `- Use /refactor for safe multi-step refactoring\n` +
-    `- Use /spec for Spec-Driven Development (requirements, design, tasks, project memory)\n` +
-    `- Use /commit for conventional commits and changelog\n` +
-    `- Use /onboard for new user setup\n` +
-    `- Use AskUserQuestion when you need clarification\n` +
+    `- /debug — debugging session issues\n` +
+    `- /simplify — review code quality and efficiency\n` +
+    `- /review — PR-level code review\n` +
+    `- /test — write and run tests\n` +
+    `- /architecture — system design decisions\n` +
+    `- /refactor — safe multi-step refactoring\n` +
+    `- /spec — Spec-Driven Development (requirements, design, tasks)\n` +
+    `- /instructions — manage custom project rules in .claudex/instructions/\n` +
+    `- /session — save/resume session state across sessions\n` +
+    `- /commit — conventional commits and changelog\n` +
+    `- /onboard — new user setup\n` +
+    `- /self-test — run Claudex's own quality checks\n` +
+    `- AskUserQuestion — when you need clarification\n` +
     `\n### Destructive Operations\n` +
     `- Always read a file before editing it\n` +
     `- Prefer Edit tool over Write for small changes (Edit is reversible)\n` +
@@ -839,7 +847,9 @@ function nativeSystemPrompt(
 
   const frontendStandardsPrompt =
     `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
-    `${CODEX_FRONTEND_MASTER_PROMPT}\n\n${UI_UX_PRO_MAX_PROMPT}`
+    `${CODEX_FRONTEND_MASTER_PROMPT}\n\n${UI_UX_PRO_MAX_PROMPT}\n\n` +
+    `### frontend-design skill (official Claude Code, always active)\n` +
+    `${FRONTEND_DESIGN_PROMPT}`
 
   // Process dynamic boundary: split into static prefix + dynamic suffix
   const boundaryIdx = systemPrompt.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY)

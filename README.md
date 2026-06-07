@@ -64,10 +64,11 @@ Claudex incluye skills internas listas para usar desde la TUI. Se invocan con `/
 Los estandares de calidad frontend estan embebidos directamente en el system prompt — el modelo los tiene disponibles desde el turno 1 sin necesidad de invocar el skill:
 
 - **`/codex-frontend-master`**: Estandares de frontend de calidad Claude Code: tipografia, color, animaciones, accesibilidad, SDD frontend, responsive, glassmorphism, scroll reveal, checklist de calidad.
+- **`/frontend-design`**: Skill oficial de Claude Code para diseño frontend distintivo. Instalado en `.claude/skills/` (como Claude Code) — disponible por defecto para todos los usuarios. Design thinking, tipografía única, motion, composición espacial, backgrounds, anti-cliché de IA.
 - **`/ui-ux-pro-max`**: Inteligencia de diseno UI/UX: branding por contexto (SaaS, editorial, lujo, gaming, salud), checklist de implementacion, calidad visual.
 
-Ambos se cargan automaticamente al iniciar la sesion. Incluye todos los estandares de:
-- Tipografia (Space Grotesk, Cormorant, Playfair, DM Sans, etc.)
+Los tres se cargan automaticamente al iniciar la sesion. Incluye todos los estandares de:
+- Tipografia (Cormorant, Playfair, Bebas Neue, DM Serif, Satoshi, Cabinet Grotesk, etc. — NUNCA Space Grotesk, Inter o Roboto)
 - Paletas de color (Dark Premium, Light Editorial, Corporate Luxury)
 - Sistema de espaciado 8px grid
 - Animaciones (fade + slide, shimmer, scroll reveal)
@@ -98,30 +99,65 @@ Ambos se cargan automaticamente al iniciar la sesion. Incluye todos los estandar
 - **`/debug`**: Diagnostico de sesiones — lee logs de debug y resuelve problemas de la TUI.
 - **`/remember`**: Revision y promocion de memoria (CLAUDE.md).
 - **`/onboard`**: Guia interactiva de primeros pasos — configuracion de provider, autenticacion, seleccion de modelo, descubrimiento de skills.
+- **`/instructions`**: Gestiona reglas personalizadas del proyecto en `.claudex/instructions/`. Se cargan automaticamente cada turno.
+- **`/session`**: Persiste y restaura estado de sesion en `.claudex/session.json`. Usa `/session save` al terminar, `/session resume` al retomar.
+- **`/self-test`**: Ejecuta quality checks sobre Claudex mismo (typecheck, build, analisis de codigo).
 - **`/batch`**: Orquestacion de trabajo en paralelo a gran escala.
 - **`/stuck`**: Investigacion diagnostica a nivel proceso.
 - **`/update-config`**: Gestion de configuracion y hooks.
 
-### Como Usar
+### Sistema de Archivos de Proyecto (`.claudex/`)
 
-Invocacion directa:
+Claudex usa un directorio `.claudex/` en la raiz del proyecto para persistir configuracion y contexto entre sesiones:
 
-```text
-/review
+```
+.claudex/
+  SPEC.md                    # Especificacion del proyecto (requisitos, diseño, tareas)
+  session.json               # Estado de sesion (task actual, archivos, progreso)
+  instructions/               # Reglas personalizadas del proyecto
+    coding-style.md           # (ejemplo) Convenciones de codigo
+    api-conventions.md        # (ejemplo) Reglas de API
+  memory/                     # Registros de sesion
+    YYYY-MM-DD.md             # Diario de sesion
+    MEMORY.md                 # Memoria curada del proyecto
 ```
 
-Con contexto:
+Este directorio se auto-descubre al iniciar sesion. No requiere configuracion manual.
+
+### Como Usar
+
+Los skills se pueden invocar directamente o con contexto. El modelo detecta automaticamente cuando debe ejecutar un skill (obligatorio segun el system prompt).
+
+**Skills de especificacion y proyecto:**
+
+```text
+/spec init                              # Inicializa .claudex/ con SPEC.md
+/spec add-requirement "login con OAuth" # Agrega requisito
+/spec task "implementar API REST"       # Agrega tarea
+/spec done "implementar API REST"       # Marca tarea completada
+/spec update                            # Sincroniza specs con el codigo real
+```
+
+**Skills de codigo (ejecucion obligatoria cuando corresponda):**
 
 ```text
 /review revisa este PR y busca problemas de seguridad
-```
-
-```text
 /test genera tests para el modulo de autenticacion
+/architecture disena el sistema de pagos
+/refactor extrae el modulo de pagos a su propio servicio
+/docs genera documentacion para la API REST
+/commit                                # Genera mensaje Conventional Commit
 ```
 
+**Skills de proyecto y configuracion:**
+
 ```text
-/architecture disena el sistema de pagos
+/instructions add coding-style "Usar functional components con hooks"
+/instructions list
+/session save                          # Guarda estado actual
+/session resume                        # Restaura sesion anterior
+/onboard                               # Guia de primeros pasos
+/self-test                             # Verifica Claudex mismo
 ```
 
 ## Modelo Y Esfuerzo
