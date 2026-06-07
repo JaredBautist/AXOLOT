@@ -10,6 +10,7 @@ import type { ToolPermissionContext, Tools } from '../../Tool.js'
 import { toolToAPISchema } from '../../utils/api.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
@@ -17,9 +18,9 @@ const directStore = new Conf({
   configName: 'direct-providers',
 })
 
-const DEFAULT_NATIVE_HISTORY_MESSAGES = 30
-const DEFAULT_NATIVE_TOOL_DESCRIPTION_CHARS = 700
-const DEFAULT_NATIVE_TOOL_RESULT_CHARS = 16_000
+const DEFAULT_NATIVE_HISTORY_MESSAGES = 100
+const DEFAULT_NATIVE_TOOL_DESCRIPTION_CHARS = 10_000
+const DEFAULT_NATIVE_TOOL_RESULT_CHARS = 100_000
 
 const nativeToolSchemaCache = new Map<
   string,
@@ -227,7 +228,7 @@ async function* streamOpenAIChat(
       model,
       stream: true,
       messages: [
-        { role: 'system', content: nativeSystemPrompt(systemPrompt) },
+        { role: 'system', content: nativeSystemPrompt(systemPrompt, 'openai') },
         ...messagesToOpenAIChat(messages),
       ],
       ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
@@ -301,7 +302,7 @@ async function* streamOpenAIResponses(
   const body = JSON.stringify({
     model,
     input,
-    instructions: nativeSystemPrompt(systemPrompt),
+    instructions: nativeSystemPrompt(systemPrompt, 'openai'),
     stream: true,
     store: false,
     ...(tools.length > 0 ? { tools: tools.map(toResponsesTool), tool_choice: 'auto' } : {}),
@@ -405,7 +406,7 @@ async function* streamGemini(
   const client = new GoogleGenerativeAI(apiKey)
   const genModel = client.getGenerativeModel({
     model,
-    systemInstruction: nativeSystemPrompt(systemPrompt),
+    systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini'),
     ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
   })
   const result = await genModel.generateContentStream(
@@ -775,10 +776,66 @@ async function buildNativeToolSchemasUncached(
   }
 }
 
-function nativeSystemPrompt(systemPrompt: SystemPrompt): string {
+function nativeSystemPrompt(
+  systemPrompt: SystemPrompt,
+  provider: 'openai' | 'gemini',
+): string {
+  const providerName = provider === 'openai' ? 'OpenAI' : 'Gemini'
+  const identity = `You are Claudex, a terminal AI assistant powered by ${providerName}. You are running inside Claudex — a TUI that gives you access to every enabled CLI tool listed in the tool schema, including file tools, shell tools, editing tools, search tools, agents, and skill/internal-prompt tools. When a task requires reading files, executing terminal commands, creating folders, editing files, inspecting the workspace, using an internal prompt, or applying a bundled skill, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.`
+
+  const claudeQualityInstructions = [
+    '## Quality Standards (Claude Code Level)',
+    '',
+    'Before writing code, always research the codebase first. Use Grep or Glob to understand the project structure, existing patterns, and conventions. Do not guess or assume.',
+    '',
+    '### Plan Mode (Always On)',
+    'Before implementing anything non-trivial:',
+    '1. Explore the project structure (Glob)',
+    '2. Read relevant files to understand existing patterns',
+    '3. Search for similar implementations (Grep)',
+    '4. Only then write code',
+    '',
+    '### Tool Chaining',
+    '- Read first, edit second, read again to verify',
+    '- When you need to understand a component, read its file AND its imports',
+    '- After editing, always read the file back to verify the edit was correct',
+    '- Chain: Read -> Edit -> Read -> Lint/Build',
+    '',
+    '### Code Quality',
+    '- Use the project\'s existing conventions, frameworks, and patterns',
+    '- Never add libraries without checking package.json first',
+    '- Write production-quality code: proper error handling, loading states, accessibility',
+    '- For frontend: follow the /codex-frontend-master skill standards for design, typography, color, animations, and accessibility',
+    '- Use semantic HTML and CSS custom properties instead of inline styles',
+    '- Ensure responsive behavior on mobile, tablet, and desktop',
+    '',
+    '### When You Need Help',
+    '- Use /ui-ux-pro-max or /codex-frontend-master for frontend design decisions',
+    '- Use /debug when debugging session issues',
+    '- Use /simplify to review code for quality and efficiency',
+    '- Use AskUserQuestion when you need clarification',
+    '',
+    '### Destructive Operations',
+    '- Always read a file before editing it',
+    '- Prefer Edit tool over Write for small changes (Edit is reversible)',
+    '- Use Bash only when no dedicated tool exists for the task',
+    '- Ask before running destructive terminal commands',
+  ].join('\n')
+
+  // Process dynamic boundary: split into static prefix + dynamic suffix
+  const boundaryIdx = systemPrompt.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY)
+  if (boundaryIdx !== -1) {
+    const staticPart = systemPrompt.slice(0, boundaryIdx).join('\n\n')
+    const dynamicPart = systemPrompt.slice(boundaryIdx + 1).join('\n\n')
+    return [identity, staticPart, claudeQualityInstructions, dynamicPart]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
   return [
-    systemPrompt.join('\n\n'),
-    'You are running inside Claudex. You have access to every enabled CLI tool listed in the tool schema, including file tools, shell tools, editing tools, search tools, agents, and skill/internal-prompt tools. When a task requires reading files, executing terminal commands, creating folders, editing files, inspecting the workspace, using an internal prompt, or applying a bundled skill, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.',
+    identity,
+    ...systemPrompt,
+    claudeQualityInstructions,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -877,7 +934,7 @@ function stripVerboseSchemaFields(value: unknown): void {
     return
   }
   const obj = value as Record<string, unknown>
-  delete obj.description
+  delete obj['$schema']
   delete obj.markdownDescription
   delete obj.examples
   for (const child of Object.values(obj)) stripVerboseSchemaFields(child)

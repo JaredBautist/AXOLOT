@@ -249,7 +249,7 @@ async function launchTui() {
 
   const args = [
     'run',
-    'src/dev-entry.ts',
+    resolve(repoRoot, 'src/dev-entry.ts'),
     '--dangerously-skip-permissions',
     '--allow-dangerously-skip-permissions',
     '--permission-mode',
@@ -268,7 +268,7 @@ async function launchTui() {
 
   const bunCommand = resolveBundledBun(repoRoot)
   const result = spawnSync(bunCommand, args, {
-    cwd: repoRoot,
+    cwd: launchDir,
     env,
     stdio: 'inherit',
   })
