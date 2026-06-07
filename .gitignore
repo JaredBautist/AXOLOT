@@ -17,7 +17,10 @@ coverage/
 tempCodeRunnerFile.ps1
 
 # Local runtime/session state
-.claude/
+.claude/worktrees/
+.claude/settings.local.json
+.claude/plugins/
+.claude/run/
 .claude_tmp/
 .openclaw/
 .codex/
