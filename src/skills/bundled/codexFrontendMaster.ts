@@ -1,6 +1,7 @@
 import { registerBundledSkill } from '../bundledSkills.js'
 import { UI_UX_PRO_MAX_PROMPT } from './uiUxProMax.js'
 import { FRONTEND_DESIGN_PROMPT } from './frontendDesign.js'
+import { V0_FRONTEND_PROMPT } from './v0Frontend.js'
 
 export const CODEX_FRONTEND_MASTER_PROMPT = `# CODEX FRONTEND MASTER — Sistema de Calidad Claude Code
 
@@ -740,7 +741,7 @@ export function registerCodexFrontendMasterSkill(): void {
     aliases: ['frontend', 'frontend-master', 'fe'],
     userInvocable: true,
     async getPromptForCommand(args) {
-      const parts = [CODEX_FRONTEND_MASTER_PROMPT, UI_UX_PRO_MAX_PROMPT, FRONTEND_DESIGN_PROMPT]
+      const parts = [CODEX_FRONTEND_MASTER_PROMPT, V0_FRONTEND_PROMPT, UI_UX_PRO_MAX_PROMPT, FRONTEND_DESIGN_PROMPT]
       if (args) {
         parts.push(`\n## User Request\n\n${args}`)
       }

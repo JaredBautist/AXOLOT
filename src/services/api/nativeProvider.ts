@@ -12,8 +12,6 @@ import { toolToAPISchema } from '../../utils/api.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
-import { CODEX_FRONTEND_MASTER_PROMPT } from '../../skills/bundled/codexFrontendMaster.js'
-import { UI_UX_PRO_MAX_PROMPT } from '../../skills/bundled/uiUxProMax.js'
 import { FRONTEND_DESIGN_PROMPT } from '../../skills/bundled/frontendDesign.js'
 import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
 import Conf from 'conf'
@@ -825,7 +823,12 @@ function nativeSystemPrompt(
     `- User asks to set project rules → MUST call /instructions first\n` +
     `- User says "continue where I left off" → MUST call /session first\n` +
     `- User asks Claudex to learn, remember routing lessons, or improve skill suggestions → MUST call /learn first\n` +
-    `- User asks to check Claudex itself → MUST call /self-test first` +
+    `- User asks to check Claudex itself → MUST call /self-test first\n` +
+    `- User asks about APIs, endpoints, or REST/GraphQL designs → MUST call /api-design first\n` +
+    `- User asks about databases, schemas, migrations, or SQL queries → MUST call /database first\n` +
+    `- User asks about deployment, Docker, CI/CD, or infrastructure → MUST call /deploy first\n` +
+    `- User asks about auth, security, or OWASP → MUST call /backend-security first\n` +
+    `- User asks about AI integration, LLMs, OpenAI, or Gemini → MUST call /ai-provider first` +
     `\n\n### When You Need Help\n` +
     `- /debug — debugging session issues\n` +
     `- /simplify — review code quality and efficiency\n` +
@@ -839,6 +842,12 @@ function nativeSystemPrompt(
     `- /learn — manage adaptive learning, RAG memory, and smart skill routing\n` +
     `- /commit — conventional commits and changelog\n` +
     `- /onboard — new user setup\n` +
+    `- /v0-frontend — Vercel v0-inspired frontend generation (opinionated stack, complete code)\n` +
+    `- /api-design — REST/GraphQL API design, OpenAPI specs, endpoint patterns\n` +
+    `- /database — schema design, migrations, query optimization, data modeling\n` +
+    `- /deploy — CI/CD pipelines, Docker, deployment strategies, infrastructure\n` +
+    `- /backend-security — auth, OWASP Top 10, secrets management, API hardening\n` +
+    `- /ai-provider — LLM integration (OpenAI, Gemini, Anthropic), streaming, RAG\n` +
     `- /self-test — run Claudex's own quality checks\n` +
     `- AskUserQuestion — when you need clarification\n` +
     `\n### Destructive Operations\n` +
@@ -849,7 +858,6 @@ function nativeSystemPrompt(
 
   const frontendStandardsPrompt =
     `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
-    `${CODEX_FRONTEND_MASTER_PROMPT}\n\n${UI_UX_PRO_MAX_PROMPT}\n\n` +
     `### frontend-design skill (official Claude Code, always active)\n` +
     `${FRONTEND_DESIGN_PROMPT}`
 

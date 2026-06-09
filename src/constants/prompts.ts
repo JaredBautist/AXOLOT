@@ -59,6 +59,7 @@ import { TICK_TAG } from './xml.js'
 import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
 import { buildLearningSystemSection } from '../services/learning/learningEngine.js'
+import { V0_FRONTEND_PROMPT } from '../skills/bundled/v0Frontend.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -591,6 +592,7 @@ ${CYBER_RISK_INSTRUCTION}`,
     systemPromptSection('learning_profile', () =>
       buildLearningSystemSection(getCwd()),
     ),
+    systemPromptSection('v0_frontend', () => V0_FRONTEND_PROMPT),
     // Numeric length anchors — research shows ~1.2% output token reduction vs
     // qualitative "be concise".
     systemPromptSection(

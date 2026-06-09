@@ -1,5 +1,13 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/tools/openclaw-proxy.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/skills/bundled/v0Frontend.ts",
+    "src/skills/bundled/frontendDesign.ts",
+    "src/skills/bundled/uiUxProMax.ts",
+    "src/skills/bundled/api-design.ts",
+    "src/skills/bundled/database.ts",
+    "src/skills/bundled/deploy.ts",
+    "src/skills/bundled/backend-security.ts",
+    "src/skills/bundled/ai-provider.ts"
+  ]
 }
