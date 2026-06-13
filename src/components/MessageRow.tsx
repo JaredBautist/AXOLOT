@@ -9,6 +9,7 @@ import { getDisplayMessageFromCollapsed, getToolSearchOrReadInfo, getToolUseIdsF
 import { type buildMessageLookups, EMPTY_STRING_SET, getProgressMessagesFromLookup, getSiblingToolUseIDsFromLookup, getToolUseID } from '../utils/messages.js';
 import { hasThinkingContent, Message } from './Message.js';
 import { MessageModel } from './MessageModel.js';
+import { MessageUsage } from './MessageUsage.js';
 import { shouldRenderStatically } from './Messages.js';
 import { MessageTimestamp } from './MessageTimestamp.js';
 import { OffscreenFreeze } from './OffscreenFreeze.js';
@@ -91,7 +92,7 @@ export function hasContentAfterIndex(messages: RenderableMessage[], index: numbe
   return false;
 }
 function MessageRowImpl(t0) {
-  const $ = _c(64);
+  const $ = _c(65);
   const {
     message: msg,
     isUserContinuation,
@@ -256,7 +257,7 @@ function MessageRowImpl(t0) {
   if (!hasMetadata) {
     let t9;
     if ($[55] !== messageEl) {
-      t9 = <OffscreenFreeze>{messageEl}</OffscreenFreeze>;
+      t9 = <OffscreenFreeze><Box flexDirection="column">{messageEl}<MessageUsage message={displayMsg} /></Box></OffscreenFreeze>;
       $[55] = messageEl;
       $[56] = t9;
     } else {
@@ -274,14 +275,15 @@ function MessageRowImpl(t0) {
     t9 = $[59];
   }
   let t10;
-  if ($[60] !== columns || $[61] !== messageEl || $[62] !== t9) {
-    t10 = <OffscreenFreeze><Box width={columns} flexDirection="column">{t9}{messageEl}</Box></OffscreenFreeze>;
+  if ($[60] !== columns || $[61] !== displayMsg || $[62] !== messageEl || $[63] !== t9) {
+    t10 = <OffscreenFreeze><Box width={columns} flexDirection="column">{t9}{messageEl}<MessageUsage message={displayMsg} /></Box></OffscreenFreeze>;
     $[60] = columns;
-    $[61] = messageEl;
-    $[62] = t9;
-    $[63] = t10;
+    $[61] = displayMsg;
+    $[62] = messageEl;
+    $[63] = t9;
+    $[64] = t10;
   } else {
-    t10 = $[63];
+    t10 = $[64];
   }
   return t10;
 }

@@ -30,7 +30,7 @@ const nativeToolSchemaCache = new Map<
   Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }>
 >()
 
-type NativeProvider = 'openai' | 'gemini'
+type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax'
 
 type NativeRoute = {
   provider: NativeProvider
@@ -62,8 +62,16 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: 'gemini', model: raw.slice(raw.indexOf('/') + 1) }
   }
 
+  if (lower.startsWith('deepseek/')) {
+    return { provider: 'deepseek', model: raw.slice('deepseek/'.length) }
+  }
+
+  if (lower.startsWith('minimax/')) {
+    return { provider: 'minimax', model: raw.slice('minimax/'.length) }
+  }
+
   const envProvider = process.env.CLAUDEX_NATIVE_PROVIDER?.toLowerCase()
-  if (envProvider === 'openai' || envProvider === 'gemini') {
+  if (envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' || envProvider === 'minimax') {
     return { provider: envProvider, model: raw }
   }
 
@@ -126,6 +134,16 @@ export async function* queryNativeProvider({
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
+    } else if (route.provider === 'deepseek') {
+      for await (const event of streamDeepSeek(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
+      }
+    } else if (route.provider === 'minimax') {
+      for await (const event of streamMiniMax(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
+      }
     } else {
       for await (const event of streamGemini(route.model, nativeMessages, systemPrompt, signal, nativeTools.gemini, onChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
@@ -158,8 +176,13 @@ export async function* queryNativeProvider({
 }
 
 function storeApiKey(provider: string): string {
+  const envVar =
+    provider === 'openai' ? 'OPENAI_API_KEY' :
+    provider === 'deepseek' ? 'DEEPSEEK_API_KEY' :
+    provider === 'minimax' ? 'MINIMAX_API_KEY' :
+    'GEMINI_API_KEY'
   return (
-    process.env[provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'] ||
+    process.env[envVar] ||
     (directStore.get(`apiKeys.${provider}`) as string) ||
     ''
   )
@@ -420,6 +443,189 @@ async function* streamGemini(
     const delta = part.text()
     if (delta) yield { type: 'event', event: onChunk(delta) }
   }
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
+}
+
+async function* streamDeepSeek(
+  model: string,
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  onChunk: (chunk: string) => StreamEvent,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  const apiKey = storeApiKey('deepseek')
+  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not configured')
+
+  const isOpenRouter = apiKey.startsWith('sk-or-v1-')
+  const baseURL = isOpenRouter ? 'https://openrouter.ai/api/v1' : 'https://api.deepseek.com'
+  const actualModel = isOpenRouter ? `deepseek/${model}` : model
+
+  const { default: OpenAI } = await import('openai')
+  const client = new OpenAI({ apiKey, baseURL })
+  const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
+  const stream = await retryOnTransient(async () =>
+    client.chat.completions.create(
+      {
+        model: actualModel,
+        stream: true,
+        messages: [
+          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'deepseek') },
+          ...messagesToOpenAIChat(messages),
+        ],
+        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+        extra_body: { thinking: 'high' },
+      },
+      { signal },
+    ),
+  )
+
+  for await (const part of stream) {
+    const delta = part.choices?.[0]?.delta?.content
+    if (delta) yield { type: 'event', event: onChunk(delta) }
+
+    for (const call of part.choices?.[0]?.delta?.tool_calls ?? []) {
+      const index = call.index ?? 0
+      const existing = toolCallChunks.get(index) ?? {
+        id: '',
+        name: '',
+        arguments: '',
+      }
+      if (call.id) existing.id = call.id
+      if (call.function?.name) existing.name = call.function.name
+      if (call.function?.arguments) existing.arguments += call.function.arguments
+      toolCallChunks.set(index, existing)
+    }
+  }
+
+  const toolCalls = [...toolCallChunks.values()]
+    .filter(call => call.name)
+    .map(call => ({
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
+    }))
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
+}
+
+async function* streamMiniMax(
+  model: string,
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  onChunk: (chunk: string) => StreamEvent,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  const apiKey = storeApiKey('minimax')
+  if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured')
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: 'system', content: nativeSystemPrompt(systemPrompt, 'minimax') },
+      ...messagesToOpenAIChat(messages),
+    ],
+    max_tokens: 16384,
+    ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+  }
+
+  const response = await fetchWithRetry('https://api.minimax.io/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ ...requestBody, stream: true }),
+    signal,
+  })
+
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('No response body')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let fullText = ''
+  let debugged = false
+  const toolCallChunks = new Map<string, { id: string; name: string; arguments: string }>()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const rawData = trimmed.slice(5).trim()
+      if (!rawData || rawData === '[DONE]') continue
+
+      try {
+        const parsed = JSON.parse(rawData)
+
+        if (!debugged) {
+          debugged = true
+          const choice0 = parsed.choices?.[0]
+          const keys = Object.keys(parsed).join(', ')
+          const choiceKeys = choice0 ? Object.keys(choice0).join(', ') : 'none'
+          const delta = choice0?.delta
+          const deltaKeys = delta ? Object.keys(delta).join(', ') : 'none'
+          console.error(`[MiniMax SSE] topKeys: ${keys} | choiceKeys: ${choiceKeys} | deltaKeys: ${deltaKeys}`)
+        }
+
+        const delta =
+          parsed.choices?.[0]?.delta?.content ??
+          parsed.choices?.[0]?.text ??
+          parsed.choices?.[0]?.delta?.text
+        if (delta) {
+          fullText += String(delta)
+          yield { type: 'event', event: onChunk(String(delta)) }
+        }
+
+        for (const call of parsed.choices?.[0]?.delta?.tool_calls ?? []) {
+          const id = String(call.index ?? '0')
+          const existing = toolCallChunks.get(id) ?? { id, name: '', arguments: '' }
+          if (call.id) existing.id = call.id
+          if (call.function?.name) existing.name = call.function.name
+          if (call.function?.arguments) existing.arguments += call.function.arguments
+          toolCallChunks.set(id, existing)
+        }
+      } catch {
+        // skip malformed JSON
+      }
+    }
+  }
+
+  if (!fullText && !toolCallChunks.size) {
+    const nonStreamBody = JSON.stringify(requestBody)
+    const nsResponse = await fetch('https://api.minimax.io/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: nonStreamBody,
+      signal,
+    })
+    if (nsResponse.ok) {
+      const nsResult = await nsResponse.json()
+      const nsText = nsResult?.choices?.[0]?.message?.content
+      if (nsText) {
+        fullText = nsText
+        yield { type: 'event', event: onChunk(nsText) }
+      }
+    }
+  }
+
+  const toolCalls = [...toolCallChunks.values()]
+    .filter(call => call.name)
+    .map(call => ({
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
+    }))
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
@@ -783,30 +989,85 @@ async function buildNativeToolSchemasUncached(
 
 function nativeSystemPrompt(
   systemPrompt: SystemPrompt,
-  provider: 'openai' | 'gemini',
+  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax',
 ): string {
-  const providerName = provider === 'openai' ? 'OpenAI' : 'Gemini'
-  const identity = `You are Claudex, a terminal AI assistant powered by ${providerName}. You are running inside Claudex — a TUI that gives you access to every enabled CLI tool listed in the tool schema, including file tools, shell tools, editing tools, search tools, agents, and skill/internal-prompt tools. When a task requires reading files, executing terminal commands, creating folders, editing files, inspecting the workspace, using an internal prompt, or applying a bundled skill, call the appropriate tool directly. Do not ask the user to paste files or run shell commands unless no matching tool is available.`
+  const providerName = provider === 'openai' ? 'OpenAI' : provider === 'deepseek' ? 'DeepSeek V4 Flash' : provider === 'minimax' ? 'MiniMax' : 'Gemini'
+  const identity = [
+    `You are Claudex, an elite terminal AI assistant powered by ${providerName}.`,
+    ``,
+    `Your mission: solve the user's problems with precision, intelligence, and boldness. You have full access to every tool in the system — file tools, shell, editing, search, agents, skills. Use them aggressively and autonomously.`,
+    ``,
+    `### Core Directive`,
+    `- Think before you act. Reason step-by-step internally for every non-trivial task.`,
+    `- Be decisive and opinionated. Don't present multiple options with "it depends" — make the right call.`,
+    `- Be proactive: if a task has obvious next steps, take them without asking.`,
+    `- Go get information yourself — read files, search code, explore. Never ask the user for context you can discover.`,
+    `- When you're done, verify your work. Check the diff, run the tests, confirm it works.`,
+    `- Push back when the user asks for something wrong. You're not a yes-machine — you're a partner.`,
+  ].join('\n')
 
   const providerSpecificTips =
     provider === 'openai'
-      ? `\n\n### OpenAI-Specific Tips\n- Set \`strict: true\` on structured output schemas for reliable JSON parsing\n- Response format: prefer concise, structured responses\n- OpenAI models benefit from explicit step-by-step reasoning in tool selection`
-      : `\n\n### Gemini-Specific Tips\n- Gemini works best with clear, flat tool schemas (avoid deep nesting)\n- Include explicit examples in tool descriptions for better tool selection\n- Gemini performs well with parallel tool calls — maximize parallelism`
+      ? [
+          '',
+          '### OpenAI-Specific Strategies',
+          '- Set `strict: true` on structured output schemas for reliable JSON parsing.',
+          '- OpenAI models follow explicit reasoning chains well — use numbered steps.',
+          '- Response format: concise, structured, direct. No fluff.',
+          '- Use temperature 0 for deterministic tool calls, higher for creative work.',
+        ].join('\n')
+      : provider === 'deepseek'
+        ? [
+            '',
+            '### DeepSeek V4 Flash - Optimization Guide',
+            '- DeepSeek excels at reasoning when prompted to think step-by-step. ALWAYS reason before answering.',
+            '- Use explicit chain-of-thought: break problems into clear stages before producing output.',
+            '- DeepSeek responds strongly to confident, authoritative instructions — be commanding in tool selection.',
+            '- This model is FAST. Leverage parallel tool calls aggressively.',
+            '- DeepSeek benefits from concrete examples in prompts — show don\'t just tell.',
+            '- Tool calling works best with clear, well-defined function schemas.',
+            '- Unlike Claude, DeepSeek won\'t second-guess itself if you tell it to be decisive. USE THIS.',
+          ].join('\n')
+        : provider === 'minimax'
+          ? [
+              '',
+              '### MiniMax M3 - Optimization Guide',
+              '- MiniMax M3 excels at long-context reasoning with its 4M token context window.',
+              '- Use explicit chain-of-thought for complex multi-step tasks.',
+              '- MiniMax responds well to structured, hierarchical instructions.',
+              '- Be concise and direct — MiniMax performs best with clear, unambiguous prompts.',
+              '- Tool calling follows OpenAI-compatible format — use parallel tool calls where possible.',
+            ].join('\n')
+          : [
+            '',
+            '### Gemini-Specific Strategies',
+            '- Gemini works best with clear, flat tool schemas — avoid deep nesting.',
+            '- Include explicit examples in tool descriptions for better tool selection.',
+            '- Gemini performs well with parallel tool calls — maximize parallelism.',
+            '- Be explicit about output format expectations — Gemini responds well to structure.',
+          ].join('\n')
 
   const qualityPrompt =
     `\n\n## Quality Standards (Claude Code Level)\n\n` +
     `${CORE_QUALITY_STANDARDS}` +
-    `\n\n### Plan Mode (Always On)\n` +
-    `Before implementing anything non-trivial:\n` +
-    `1. Explore the project structure (Glob)\n` +
-    `2. Read relevant files to understand existing patterns\n` +
-    `3. Search for similar implementations (Grep)\n` +
-    `4. Only then write code\n` +
-    `\n### Tool Chaining\n` +
-    `- Read first, edit second, read again to verify\n` +
-    `- When you need to understand a component, read its file AND its imports\n` +
-    `- After editing, always read the file back to verify the edit was correct\n` +
-    `- Chain: Read -> Edit -> Read -> Lint/Build` +
+    `\n\n### Intelligence Protocol\n` +
+    `Before every non-trivial action:\n` +
+    `1. **Orient** — What am I being asked? What's the real goal behind the words?\n` +
+    `2. **Explore** — What does the codebase already say? Read files, search patterns.\n` +
+    `3. **Reason** — What's the best approach? Why? What could go wrong?\n` +
+    `4. **Execute** — Do it. Fast. With confidence.\n` +
+    `5. **Verify** — Did it work? Prove it.\n` +
+    `\n### Tool Chaining (Mandatory)\n` +
+    `- Read BEFORE edit. Always. No exceptions.\n` +
+    `- When you need to understand a component, read ITS file AND its IMPORTS.\n` +
+    `- After editing, ALWAYS read the file back to verify correctness.\n` +
+    `- Chain: Read → Edit → Read → Lint/Build/Test\n` +
+    `- **Parallelize aggressively**: When you need to read multiple files, batch them in one tool call. When tasks don't depend on each other, execute them concurrently. This is critical for DeepSeek's fast inference — don't waste it with sequential busywork.\n` +
+    `\n### Proactive Agency\n` +
+    `- Don't ask "should I..." for obvious next steps. Just do them.\n` +
+    `- Found a bug while working on something else? Fix it. Don't mention it — fix it.\n` +
+    `- See an opportunity to improve code quality? Take it. That's your job.\n` +
+    `- If you need data to make a decision, go get it. No hesitation.` +
     providerSpecificTips +
     `\n\n### Skill Execution (MANDATORY — NOT Optional)\n` +
     `When the user's request matches a skill's purpose, you MUST execute that skill BEFORE writing code. This is required, not a suggestion. Do not skip skills. Do not implement directly without invoking the relevant skill first.\n\n` +
@@ -828,7 +1089,9 @@ function nativeSystemPrompt(
     `- User asks about databases, schemas, migrations, or SQL queries → MUST call /database first\n` +
     `- User asks about deployment, Docker, CI/CD, or infrastructure → MUST call /deploy first\n` +
     `- User asks about auth, security, or OWASP → MUST call /backend-security first\n` +
-    `- User asks about AI integration, LLMs, OpenAI, or Gemini → MUST call /ai-provider first` +
+    `- User asks about AI integration, LLMs, OpenAI, or Gemini → MUST call /ai-provider first\n` +
+    `- User asks about tokens, cost, budget, efficiency, or API spend → MUST call /token-saver first\n` +
+    `- Task seems unusually broad or potentially wasteful of tokens → call /token-saver first to scope it down` +
     `\n\n### When You Need Help\n` +
     `- /debug — debugging session issues\n` +
     `- /simplify — review code quality and efficiency\n` +
@@ -849,6 +1112,7 @@ function nativeSystemPrompt(
     `- /backend-security — auth, OWASP Top 10, secrets management, API hardening\n` +
     `- /ai-provider — LLM integration (OpenAI, Gemini, Anthropic), streaming, RAG\n` +
     `- /self-test — run Claudex's own quality checks\n` +
+    `- /token-saver — optimize token consumption, set budgets, tune effort vs cost\n` +
     `- AskUserQuestion — when you need clarification\n` +
     `\n### Destructive Operations\n` +
     `- Always read a file before editing it\n` +
@@ -1120,6 +1384,18 @@ function stripVerboseSchemaFields(value: unknown): void {
   delete obj['$schema']
   delete obj.markdownDescription
   delete obj.examples
+  // Strip JSON Schema constraint fields — models don't need them for function calling
+  // and they waste tokens, especially for smaller models
+  delete obj.minLength
+  delete obj.maxLength
+  delete obj.pattern
+  delete obj.minItems
+  delete obj.maxItems
+  delete obj.minimum
+  delete obj.maximum
+  delete obj.exclusiveMinimum
+  delete obj.exclusiveMaximum
+  delete obj.default
   for (const child of Object.values(obj)) stripVerboseSchemaFields(child)
 }
 

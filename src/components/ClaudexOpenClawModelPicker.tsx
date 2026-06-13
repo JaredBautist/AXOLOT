@@ -47,6 +47,14 @@ const AUTH_URLS: Record<string, { login: string; label: string }> = {
     login: 'https://console.anthropic.com/login',
     label: 'console.anthropic.com',
   },
+  deepseek: {
+    login: 'https://platform.deepseek.com/api_keys',
+    label: 'platform.deepseek.com',
+  },
+  minimax: {
+    login: 'https://platform.minimaxi.com/',
+    label: 'platform.minimaxi.com',
+  },
 }
 
 const providerOptions = [
@@ -69,6 +77,20 @@ const providerOptions = [
     label: 'Google Gemini',
     description: 'Gemini API models, e.g. gemini-2.5-pro.',
     placeholder: 'gemini-2.5-pro',
+    hasOAuth: false,
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    description: 'DeepSeek API models, e.g. deepseek-v4-flash.',
+    placeholder: 'deepseek-v4-flash',
+    hasOAuth: false,
+  },
+  {
+    id: 'minimax',
+    label: 'MiniMax',
+    description: 'MiniMax API models, e.g. MiniMax-M3.',
+    placeholder: 'MiniMax-M3',
     hasOAuth: false,
   },
 ] as const
@@ -233,6 +255,8 @@ export function ClaudexOpenClawModelPicker({
     if (provider.id === 'claude') return 'claude'
     if (provider.id === 'openai') return 'suggestion'
     if (provider.id === 'gemini') return 'success'
+    if (provider.id === 'deepseek') return 'warning'
+    if (provider.id === 'minimax') return 'info'
     return 'permission'
   }
 
@@ -250,6 +274,8 @@ export function ClaudexOpenClawModelPicker({
 
     if (provider.id === 'openai') process.env.OPENAI_API_KEY = credentials
     else if (provider.id === 'gemini') process.env.GEMINI_API_KEY = credentials
+    else if (provider.id === 'deepseek') process.env.DEEPSEEK_API_KEY = credentials
+    else if (provider.id === 'minimax') process.env.MINIMAX_API_KEY = credentials
     else if (provider.id === 'claude') {
       if (type === 'oauth') {
         process.env.ANTHROPIC_AUTH_TOKEN = credentials

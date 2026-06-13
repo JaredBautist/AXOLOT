@@ -283,6 +283,7 @@ export function getCanonicalName(fullModelName: ModelName): ModelShortName {
     lowered.startsWith('openai-codex/') ||
     lowered.startsWith('ollama/') ||
     lowered.startsWith('gpt-') ||
+    lowered.startsWith('minimax/') ||
     /^o\d/.test(lowered)
   ) {
     return lowered as ModelShortName
@@ -380,6 +381,8 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
       return 'GPT 5.4 Mini · OpenAI Codex'
     case 'openai-codex/gpt-5.4-pro':
       return 'GPT 5.4 Pro · OpenAI Codex'
+    case 'minimax/MiniMax-M3':
+      return 'MiniMax M3'
     case 'ollama/qwen2.5-coder:3b':
       return 'Qwen 2.5 Coder 3B (Ollama)'
     case 'ollama/gemma3:1b':
@@ -492,6 +495,7 @@ export function parseUserSpecifiedModel(
     normalizedModel.startsWith('openai/') ||
     normalizedModel.startsWith('openai-codex/') ||
     normalizedModel.startsWith('ollama/') ||
+    normalizedModel.startsWith('minimax/') ||
     normalizedModel.startsWith('gpt-') ||
     /^o\d/.test(normalizedModel)
   ) {

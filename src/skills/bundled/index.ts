@@ -32,6 +32,7 @@ import { registerDatabaseSkill } from './database.js'
 import { registerDeploySkill } from './deploy.js'
 import { registerBackendSecuritySkill } from './backend-security.js'
 import { registerAiProviderSkill } from './ai-provider.js'
+import { registerTokenSaverSkill } from './tokenSaver.js'
 
 /**
  * Initialize all bundled skills.
@@ -74,6 +75,7 @@ export function initBundledSkills(): void {
   registerDeploySkill()
   registerBackendSecuritySkill()
   registerAiProviderSkill()
+  registerTokenSaverSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')

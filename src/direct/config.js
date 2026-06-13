@@ -1,11 +1,13 @@
 import Conf from 'conf'
 
-export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini'])
+export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax'])
 
 const DEFAULT_MODELS = Object.freeze({
   claude: 'claude-3-5-sonnet-latest',
   openai: 'gpt-5.5',
   gemini: 'gemini-2.5-pro',
+  deepseek: 'deepseek-v4-flash',
+  minimax: 'MiniMax-M3',
 })
 
 const store = new Conf({
@@ -25,6 +27,8 @@ export function normalizeProvider(provider) {
     return 'openai'
   }
   if (value === 'google' || value === 'gemini') return 'gemini'
+  if (value === 'deepseek') return 'deepseek'
+  if (value === 'minimax') return 'minimax'
 
   throw new Error(
     `Proveedor no soportado: ${provider}. Usa: ${PROVIDERS.join(', ')}`,
@@ -133,6 +137,10 @@ function envKeyForProvider(provider) {
       return 'OPENAI_API_KEY'
     case 'gemini':
       return 'GEMINI_API_KEY'
+    case 'deepseek':
+      return 'DEEPSEEK_API_KEY'
+    case 'minimax':
+      return 'MINIMAX_API_KEY'
     default:
       return ''
   }

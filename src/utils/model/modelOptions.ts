@@ -488,6 +488,16 @@ export function getModelOptions(fastMode = false): ModelOption[] {
       value: 'ollama/gemma3:1b',
       label: 'Gemma 3 1B (Ollama)',
       description: 'Modelo local ultrarrápido de Google'
+    },
+    {
+      value: 'deepseek/deepseek-v4-flash',
+      label: 'DeepSeek V4 Flash',
+      description: 'DeepSeek V4 Flash Free — rápido, eficiente, 1M contexto'
+    },
+    {
+      value: 'minimax/MiniMax-M3',
+      label: 'MiniMax M3',
+      description: 'MiniMax M3 — modelo avanzado con 4M contexto'
     }
   ];
 

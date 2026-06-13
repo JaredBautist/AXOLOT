@@ -237,6 +237,9 @@ async function launchTui() {
     if (providerName === 'gemini') {
       env.GEMINI_API_KEY = apiKey
     }
+    if (providerName === 'minimax') {
+      env.MINIMAX_API_KEY = apiKey
+    }
   }
 
   delete env.ANTHROPIC_API_URL

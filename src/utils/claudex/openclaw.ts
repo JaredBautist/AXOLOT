@@ -124,6 +124,8 @@ export function getOpenClawProviderLabel(model: string | null): string {
     }
     if (provider === 'openai') return 'OpenAI'
     if (provider === 'gemini' || provider === 'google') return 'Gemini'
+    if (provider === 'deepseek') return 'DeepSeek'
+    if (provider === 'minimax') return 'MiniMax'
     if (provider === 'claude' || provider === 'anthropic') return 'Claude API'
     return 'Native provider'
   }
@@ -148,6 +150,8 @@ export function listOpenClawModels(): OpenClawModel[] {
       directModel('claude', 'claude-3-5-sonnet-latest', 'Claude API'),
       directModel('gemini', 'gemini-2.5-pro', 'Gemini'),
       directModel('gemini', 'gemini-1.5-flash', 'Gemini'),
+      directModel('deepseek', 'deepseek-v4-flash', 'DeepSeek V4 Flash'),
+      directModel('minimax', 'MiniMax-M3', 'MiniMax M3'),
     ]
 
     const openaiCredType = directStore.get('credentialType.openai') as string
@@ -277,6 +281,8 @@ function normalizeDirectProvider(provider: string): string {
 function defaultDirectModel(provider: string): string {
   if (provider === 'openai') return 'gpt-4o-mini'
   if (provider === 'gemini') return 'gemini-2.5-pro'
+  if (provider === 'deepseek') return 'deepseek-v4-flash'
+  if (provider === 'minimax') return 'MiniMax-M3'
   return 'claude-3-5-sonnet-latest'
 }
 
@@ -284,5 +290,7 @@ function getDirectApiKey(provider: string): string {
   const normalized = normalizeDirectProvider(provider)
   if (normalized === 'openai') return process.env.OPENAI_API_KEY || ''
   if (normalized === 'gemini') return process.env.GEMINI_API_KEY || ''
+  if (normalized === 'deepseek') return process.env.DEEPSEEK_API_KEY || ''
+  if (normalized === 'minimax') return process.env.MINIMAX_API_KEY || ''
   return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
 }

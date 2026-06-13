@@ -111,6 +111,20 @@ export const OLLAMA_GEMMA_1B_CONFIG = {
   foundry: 'ollama/gemma3:1b',
 } as const satisfies ModelConfig
 
+export const DEEPSEEK_V4_FLASH_CONFIG = {
+  firstParty: 'deepseek/deepseek-v4-flash',
+  bedrock: 'deepseek/deepseek-v4-flash',
+  vertex: 'deepseek/deepseek-v4-flash',
+  foundry: 'deepseek/deepseek-v4-flash',
+} as const satisfies ModelConfig
+
+export const MINIMAX_M3_CONFIG = {
+  firstParty: 'minimax/MiniMax-M3',
+  bedrock: 'minimax/MiniMax-M3',
+  vertex: 'minimax/MiniMax-M3',
+  foundry: 'minimax/MiniMax-M3',
+} as const satisfies ModelConfig
+
 // @[MODEL LAUNCH]: Register the new config here.
 export const ALL_MODEL_CONFIGS = {
   haiku35: CLAUDE_3_5_HAIKU_CONFIG,
@@ -130,6 +144,10 @@ export const ALL_MODEL_CONFIGS = {
   opus41: CLAUDE_OPUS_4_1_CONFIG,
   opus45: CLAUDE_OPUS_4_5_CONFIG,
   opus46: CLAUDE_OPUS_4_6_CONFIG,
+  'deepseek/deepseek-v4-flash': DEEPSEEK_V4_FLASH_CONFIG,
+  deepseek: DEEPSEEK_V4_FLASH_CONFIG,
+  'minimax/MiniMax-M3': MINIMAX_M3_CONFIG,
+  minimax: MINIMAX_M3_CONFIG,
 } as const satisfies Record<string, ModelConfig>
 
 export type ModelKey = keyof typeof ALL_MODEL_CONFIGS
