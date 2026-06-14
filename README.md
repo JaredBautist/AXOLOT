@@ -40,14 +40,16 @@ claudex use openai gpt-4o
 claudex use gemini gemini-2.5-pro
 ```
 
-**20+ Built-in Skills** — Invoke with `/<skill-name>`. The model selects them automatically based on your task.
+**30+ Built-in Skills** — Invoke with `/<skill-name>`. The model auto-selects them based on your task.
 
 | Category | Skills |
 |----------|--------|
-| Frontend | `codex-frontend-master`, `frontend-design`, `ui-ux-pro-max` |
+| Frontend | `codex-frontend-master`, `frontend-design`, `v0-frontend`, `ui-ux-pro-max` |
 | Code Quality | `verify`, `review`, `test`, `refactor`, `simplify`, `self-test` |
-| Architecture | `spec`, `architecture`, `docs`, `commit` |
-| Productivity | `debug`, `onboard`, `instructions`, `session`, `batch`, `stuck` |
+| Architecture & Docs | `spec`, `architecture`, `docs`, `commit` |
+| Backend & Infra | `api-design`, `database`, `deploy`, `backend-security` |
+| Productivity | `debug`, `onboard`, `instructions`, `session`, `batch`, `stuck`, `remember`, `learn`, `token-saver` |
+| AI & Providers | `ai-provider`, `skillify`, `keybindings`, `update-config` |
 
 **Spec-Driven Development** — Define requirements, design, and tasks in `.claudex/SPEC.md`. The model reads and updates them as you work.
 
@@ -56,6 +58,10 @@ claudex use gemini gemini-2.5-pro
 **Session Persistence** — Save and restore session state across terminal sessions with `/session save` and `/session resume`.
 
 **Custom Instructions** — Add project-specific rules in `.claudex/instructions/`. They load every turn automatically.
+
+**Adaptive Learning** — Claudex learns your preferences over time. Use `/learn` to manage memory, skill preferences, and suggestions.
+
+**Token Optimization** — `/token-saver` with 4 modes (`auto`, `eco`, `turbo`, `budget`) to control token consumption. Per-message usage display shows `in:X out:Y` for every response.
 
 ## Usage
 
@@ -82,6 +88,9 @@ claudex -p openai -m gpt-4o-mini chat "hi"  # Override
 /commit                   # Conventional commit
 /self-test                # Run Claudex's own checks
 /session save             # Save state
+/learn                    # Manage learning & preferences
+/token-saver eco          # Optimize token usage
+/v0-frontend              # Vercel-v0-style frontend
 ```
 
 ## Requirements
@@ -130,7 +139,7 @@ Claudex is a **direct-provider** TUI. Unlike tools that require a proxy server o
 - You own your keys and your data
 - No external dependencies beyond Node.js and npm
 
-The skills system is inspired by Claude Code but extended with Spec-Driven Development, session persistence, and structured project memory via `.claudex/`.
+The skills system is inspired by Claude Code but extended with Spec-Driven Development, session persistence, structured project memory via `.claudex/`, adaptive learning, and per-message token tracking.
 
 ## Project Structure
 
@@ -140,7 +149,9 @@ The skills system is inspired by Claude Code but extended with Spec-Driven Devel
   SPEC.md                   #   Requirements, design, tasks
   instructions/             #   Custom project rules
   session.json              #   Current session state
-src/skills/bundled/         # Built-in TypeScript skills
+  learning/                 #   Adaptive learning data
+    state.json              #     Skill usage, preferences, memories
+src/skills/bundled/         # Built-in TypeScript skills (30+)
 skillpacks/                 # Curated skill packs
 ```
 
