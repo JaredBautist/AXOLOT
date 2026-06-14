@@ -640,11 +640,36 @@ async function* queryLoop(
         toolUseContext.options.mainLoopModel,
       )
       if (isAtBlockingLimit) {
-        yield createAssistantAPIErrorMessage({
-          content: PROMPT_TOO_LONG_ERROR_MESSAGE,
-          error: 'invalid_request',
-        })
-        return { reason: 'blocking_limit' }
+        // Emergency pre-flush compact: try to compact before erroring.
+        const emergencyCompact = await deps.autocompact(
+          messagesForQuery,
+          toolUseContext,
+          {
+            systemPrompt,
+            userContext,
+            systemContext,
+            toolUseContext,
+            forkContextMessages: messagesForQuery,
+          },
+          querySource,
+          tracking,
+          snipTokensFreed,
+        )
+        if (emergencyCompact.compactionResult) {
+          messagesForQuery = buildPostCompactMessages(emergencyCompact.compactionResult)
+          tracking = {
+            compacted: true,
+            turnId: deps.uuid(),
+            turnCounter: 0,
+            consecutiveFailures: 0,
+          }
+        } else {
+          yield createAssistantAPIErrorMessage({
+            content: PROMPT_TOO_LONG_ERROR_MESSAGE,
+            error: 'invalid_request',
+          })
+          return { reason: 'blocking_limit' }
+        }
       }
     }
 

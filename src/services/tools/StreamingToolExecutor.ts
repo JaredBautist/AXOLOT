@@ -31,6 +31,15 @@ type TrackedTool = {
   contextModifiers?: Array<(context: ToolUseContext) => ToolUseContext>
 }
 
+const MAX_TOOL_USE_CONCURRENCY = (() => {
+  const env = process.env.CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY
+  if (env) {
+    const n = parseInt(env, 10)
+    if (!isNaN(n) && n > 0) return n
+  }
+  return 10
+})()
+
 /**
  * Executes tools as they stream in with concurrency control.
  * - Concurrent-safe tools can execute in parallel with other concurrent-safe tools
@@ -128,6 +137,7 @@ export class StreamingToolExecutor {
    */
   private canExecuteTool(isConcurrencySafe: boolean): boolean {
     const executingTools = this.tools.filter(t => t.status === 'executing')
+    if (executingTools.length >= MAX_TOOL_USE_CONCURRENCY) return false
     return (
       executingTools.length === 0 ||
       (isConcurrencySafe && executingTools.every(t => t.isConcurrencySafe))
@@ -146,6 +156,9 @@ export class StreamingToolExecutor {
       } else {
         // Can't execute this tool yet, and since we need to maintain order for non-concurrent tools, stop here
         if (!tool.isConcurrencySafe) break
+        // Concurrent tool blocked by concurrency cap — keep checking later tools
+        // in case one of them is non-concurrent and CAN execute (it only needs
+        // exclusive access, which means zero concurrent tools must finish first).
       }
     }
   }

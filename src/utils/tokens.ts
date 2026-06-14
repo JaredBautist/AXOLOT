@@ -3,6 +3,10 @@ import { roughTokenCountEstimationForMessages } from '../services/tokenEstimatio
 import type { AssistantMessage, Message } from '../types/message.js'
 import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL } from './messages.js'
 import { jsonStringify } from './slowOperations.js'
+// Simple identity cache for token counts keyed by message array reference.
+// Within a single turn the same array is queried 2-3 times (shouldAutoCompact
+// + blocking limit check); caching avoids redundant O(n) walks.
+const _tcCache = new WeakMap<readonly Message[], number>()
 
 export function getTokenUsage(message: Message): Usage | undefined {
   if (
@@ -224,6 +228,10 @@ export function getAssistantMessageContentLength(
  * so every interleaved tool_result is included in the rough estimate.
  */
 export function tokenCountWithEstimation(messages: readonly Message[]): number {
+  const cached = _tcCache.get(messages)
+  if (cached !== undefined) return cached
+
+  let result: number
   let i = messages.length - 1
   while (i >= 0) {
     const message = messages[i]
@@ -250,12 +258,15 @@ export function tokenCountWithEstimation(messages: readonly Message[]): number {
           j--
         }
       }
-      return (
+      result =
         getTokenCountFromUsage(usage) +
         roughTokenCountEstimationForMessages(messages.slice(i + 1))
-      )
+      _tcCache.set(messages, result)
+      return result
     }
     i--
   }
-  return roughTokenCountEstimationForMessages(messages)
+  result = roughTokenCountEstimationForMessages(messages)
+  _tcCache.set(messages, result)
+  return result
 }

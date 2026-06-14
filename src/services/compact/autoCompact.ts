@@ -60,6 +60,11 @@ export type AutoCompactTrackingState = {
 }
 
 export const AUTOCOMPACT_BUFFER_TOKENS = 13_000
+// Percentage-based headroom floor: for large context windows the fixed 13K
+// buffer is proportionally tiny (~1.3% at 1M), leaving almost no room for
+// the compact model to work.  This ensures at least this % of the effective
+// window is reserved as headroom.  Set to 0 to disable.
+export const AUTOCOMPACT_HEADROOM_PCT = 5 // 5%
 export const WARNING_THRESHOLD_BUFFER_TOKENS = 20_000
 export const ERROR_THRESHOLD_BUFFER_TOKENS = 20_000
 export const MANUAL_COMPACT_BUFFER_TOKENS = 3_000
@@ -72,10 +77,17 @@ const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
 export function getAutoCompactThreshold(model: string): number {
   const effectiveContextWindow = getEffectiveContextWindowSize(model)
 
-  const autocompactThreshold =
-    effectiveContextWindow - AUTOCOMPACT_BUFFER_TOKENS
+  // Headroom = max(fixed buffer, percentage of window).  For large models
+  // the percentage ensures proportionally meaningful breathing room.
+  const minHeadroom = Math.max(
+    AUTOCOMPACT_BUFFER_TOKENS,
+    AUTOCOMPACT_HEADROOM_PCT > 0
+      ? Math.floor(effectiveContextWindow * (AUTOCOMPACT_HEADROOM_PCT / 100))
+      : 0,
+  )
+  const autocompactThreshold = effectiveContextWindow - minHeadroom
 
-  // Override for easier testing of autocompact
+  // CLAUDE_AUTOCOMPACT_PCT_OVERRIDE takes precedence (testing convenience)
   const envPercent = process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE
   if (envPercent) {
     const parsed = parseFloat(envPercent)
