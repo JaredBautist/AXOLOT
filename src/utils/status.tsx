@@ -12,7 +12,7 @@ import { formatNumber } from './format.js';
 import { getIdeClientName, type IDEExtensionInstallationStatus, isJetBrainsIde, toIDEDisplayName } from './ide.js';
 import { getClaudeAiUserDefaultModelDescription, modelDisplayString } from './model/model.js';
 import { getAPIProvider } from './model/providers.js';
-import { getOpenClawProviderLabel, isClaudexNativeMode, isClaudexOpenClawMode } from './claudex/openclaw.js';
+import { getOpenClawProviderLabel, isAxolotNativeMode, isAxolotOpenClawMode } from './axolot/openclaw.js';
 import { getMTLSConfig } from './mtls.js';
 import { checkInstall } from './nativeInstaller/index.js';
 import { getProxyUrl } from './proxy.js';
@@ -239,13 +239,13 @@ export function buildAccountProperties(): Property[] {
   return properties;
 }
 export function buildAPIProviderProperties(): Property[] {
-  if (isClaudexOpenClawMode()) {
+  if (isAxolotOpenClawMode()) {
     return [{
       label: 'AI provider',
       value: getOpenClawProviderLabel(process.env.ANTHROPIC_MODEL ?? null)
     }, {
-      label: isClaudexNativeMode() ? 'Connection' : 'Gateway',
-      value: isClaudexNativeMode() ? 'Native SDK' : 'OpenClaw'
+      label: isAxolotNativeMode() ? 'Connection' : 'Gateway',
+      value: isAxolotNativeMode() ? 'Native SDK' : 'OpenClaw'
     }];
   }
   const apiProvider = getAPIProvider();
@@ -363,7 +363,7 @@ export function buildAPIProviderProperties(): Property[] {
 }
 export function getModelDisplayLabel(mainLoopModel: string | null): string {
   let modelLabel = modelDisplayString(mainLoopModel);
-  if (isClaudexOpenClawMode() && mainLoopModel === null) {
+  if (isAxolotOpenClawMode() && mainLoopModel === null) {
     return 'Select your provider and model';
   }
   if (mainLoopModel === null && isClaudeAISubscriber()) {

@@ -8,7 +8,7 @@ import {
   getOpenClawPrimaryModel,
   listOpenClawModels,
   setOpenClawModel,
-} from '../utils/claudex/openclaw.js'
+} from '../utils/axolot/openclaw.js'
 import {
   saveApiKey,
   saveOAuthToken,
@@ -28,11 +28,11 @@ import { StatusIcon } from './design-system/StatusIcon.js'
 import { LoadingState } from './design-system/LoadingState.js'
 import TextInput from './TextInput.js'
 
-const PROVIDER_PREFIX = '__CLAUDEX_PROVIDER__'
-const PROVIDER_MODEL = '__CLAUDEX_PROVIDER_MODEL__'
-const PROVIDER_BACK = '__CLAUDEX_PROVIDER_BACK__'
-const PROVIDER_LOGIN_OAUTH = '__CLAUDEX_LOGIN_OAUTH__'
-const PROVIDER_LOGOUT = '__CLAUDEX_LOGOUT__'
+const PROVIDER_PREFIX = '__AXOLOT_PROVIDER__'
+const PROVIDER_MODEL = '__AXOLOT_PROVIDER_MODEL__'
+const PROVIDER_BACK = '__AXOLOT_PROVIDER_BACK__'
+const PROVIDER_LOGIN_OAUTH = '__AXOLOT_LOGIN_OAUTH__'
+const PROVIDER_LOGOUT = '__AXOLOT_LOGOUT__'
 
 const AUTH_URLS: Record<string, { login: string; label: string }> = {
   openai: {
@@ -61,7 +61,7 @@ const providerOptions = [
   {
     id: 'claude',
     label: 'Anthropic',
-    description: 'Claude API models, e.g. claude-sonnet-4-5.',
+    description: 'Anthropic API models, e.g. Sonnet.',
     placeholder: 'claude-sonnet-4-5',
     hasOAuth: true,
   },
@@ -120,7 +120,7 @@ type Props = {
   ) => void
 }
 
-export function ClaudexOpenClawModelPicker({
+export function AxolotOpenClawModelPicker({
   onDone,
 }: Props): React.ReactNode {
   const setAppState = useSetAppState()

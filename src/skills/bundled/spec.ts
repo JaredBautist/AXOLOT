@@ -2,13 +2,13 @@ import { registerBundledSkill } from '../bundledSkills.js'
 
 const SPEC_SKILL_PROMPT = `# Spec Skill — Spec-Driven Development
 
-Manages the project's \`.claudex/\` directory for Spec-Driven Development (SDD).
+Manages the project's \`.axolot/\` directory for Spec-Driven Development (SDD).
 This system keeps requirements, design decisions, tasks, and session memory version-controlled alongside the code.
 
 ## Directory Structure
 
 \`\`\`
-.claudex/
+.axolot/
   SPEC.md          # Main spec — requirements, design, tasks
   memory/           # Session logs (YYYY-MM-DD.md)
     MEMORY.md       # Curated long-term project memory
@@ -17,7 +17,7 @@ This system keeps requirements, design decisions, tasks, and session memory vers
 ## Commands
 
 ### \`/spec init\`
-Scaffold \`.claudex/\` in the project root (CWD). Creates SPEC.md with a template covering:
+Scaffold \`.axolot/\` in the project root (CWD). Creates SPEC.md with a template covering:
 - **Requirements**: functional + non-functional, acceptance criteria
 - **Design**: architecture, data model, component tree, API contracts
 - **Tasks**: backlog with status (pending/in-progress/done/cancelled)
@@ -25,7 +25,7 @@ Scaffold \`.claudex/\` in the project root (CWD). Creates SPEC.md with a templat
 If SPEC.md already exists, re-reads it and reports current state.
 
 ### \`/spec\` (no args)
-Reads the current \`.claudex/SPEC.md\` and reports the project status — what's defined, what's in progress, what's done.
+Reads the current \`.axolot/SPEC.md\` and reports the project status — what's defined, what's in progress, what's done.
 
 ### \`/spec update\`
 Re-reads the current SPEC.md, reconciles with what you've learned from reading the actual codebase, and writes an updated version. Use this when:
@@ -86,14 +86,14 @@ Appends a design decision to the Design section.
 - Never overwrite existing work in SPEC.md — always append or update
 - Before any non-trivial implementation, check SPEC.md for existing requirements
 - When completing a task, update SPEC.md to mark it done
-- Log session notes to \`.claudex/memory/YYYY-MM-DD.md\` at the end of each session
-- Keep MEMORY.md in \`.claudex/memory/\` for cross-session curated knowledge`
+- Log session notes to \`.axolot/memory/YYYY-MM-DD.md\` at the end of each session
+- Keep MEMORY.md in \`.axolot/memory/\` for cross-session curated knowledge`
 
 export function registerSpecSkill(): void {
   registerBundledSkill({
     name: 'spec',
     description:
-      'Spec-Driven Development: scaffold and manage .claudex/ with requirements, design, tasks, and session memory.',
+      'Spec-Driven Development: scaffold and manage .axolot/ with requirements, design, tasks, and session memory.',
     whenToUse:
       'Use at the start of a project to scaffold specs. Use before any implementation to read existing specs. Use during implementation to update progress. Use at session end to log memories.',
     aliases: ['sdd', 'project-spec', 'requirements', 'scaffold'],

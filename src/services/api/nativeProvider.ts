@@ -17,7 +17,7 @@ import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
-  projectName: 'claudex',
+  projectName: 'axolot',
   configName: 'direct-providers',
 })
 
@@ -70,7 +70,7 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: 'minimax', model: raw.slice('minimax/'.length) }
   }
 
-  const envProvider = process.env.CLAUDEX_NATIVE_PROVIDER?.toLowerCase()
+  const envProvider = process.env.AXOLOT_NATIVE_PROVIDER?.toLowerCase()
   if (envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' || envProvider === 'minimax') {
     return { provider: envProvider, model: raw }
   }
@@ -993,7 +993,7 @@ function nativeSystemPrompt(
 ): string {
   const providerName = provider === 'openai' ? 'OpenAI' : provider === 'deepseek' ? 'DeepSeek V4 Flash' : provider === 'minimax' ? 'MiniMax' : 'Gemini'
   const identity = [
-    `You are Claudex, an elite terminal AI assistant powered by ${providerName}.`,
+    `You are Axolot, an elite terminal AI assistant powered by ${providerName}.`,
     ``,
     `Your mission: solve the user's problems with precision, intelligence, and boldness. You have full access to every tool in the system — file tools, shell, editing, search, agents, skills. Use them aggressively and autonomously.`,
     ``,
@@ -1026,7 +1026,7 @@ function nativeSystemPrompt(
             '- This model is FAST. Leverage parallel tool calls aggressively.',
             '- DeepSeek benefits from concrete examples in prompts — show don\'t just tell.',
             '- Tool calling works best with clear, well-defined function schemas.',
-            '- Unlike Claude, DeepSeek won\'t second-guess itself if you tell it to be decisive. USE THIS.',
+            '- DeepSeek responds well to decisive instructions. USE THIS.',
           ].join('\n')
         : provider === 'minimax'
           ? [
@@ -1048,7 +1048,7 @@ function nativeSystemPrompt(
           ].join('\n')
 
   const qualityPrompt =
-    `\n\n## Quality Standards (Claude Code Level)\n\n` +
+    `\n\n## Quality Standards (Axolot Level)\n\n` +
     `${CORE_QUALITY_STANDARDS}` +
     `\n\n### Intelligence Protocol\n` +
     `Before every non-trivial action:\n` +
@@ -1083,8 +1083,8 @@ function nativeSystemPrompt(
     `- Task involves frontend → MUST call /codex-frontend-master or /frontend-design first\n` +
     `- User asks to set project rules → MUST call /instructions first\n` +
     `- User says "continue where I left off" → MUST call /session first\n` +
-    `- User asks Claudex to learn, remember routing lessons, or improve skill suggestions → MUST call /learn first\n` +
-    `- User asks to check Claudex itself → MUST call /self-test first\n` +
+    `- User asks Axolot to learn, remember routing lessons, or improve skill suggestions → MUST call /learn first\n` +
+    `- User asks to check Axolot itself → MUST call /self-test first\n` +
     `- User asks about APIs, endpoints, or REST/GraphQL designs → MUST call /api-design first\n` +
     `- User asks about databases, schemas, migrations, or SQL queries → MUST call /database first\n` +
     `- User asks about deployment, Docker, CI/CD, or infrastructure → MUST call /deploy first\n` +
@@ -1100,7 +1100,7 @@ function nativeSystemPrompt(
     `- /architecture — system design decisions\n` +
     `- /refactor — safe multi-step refactoring\n` +
     `- /spec — Spec-Driven Development (requirements, design, tasks)\n` +
-    `- /instructions — manage custom project rules in .claudex/instructions/\n` +
+    `- /instructions — manage custom project rules in .axolot/instructions/\n` +
     `- /session — save/resume session state across sessions\n` +
     `- /learn — manage adaptive learning, RAG memory, and smart skill routing\n` +
     `- /commit — conventional commits and changelog\n` +
@@ -1111,7 +1111,7 @@ function nativeSystemPrompt(
     `- /deploy — CI/CD pipelines, Docker, deployment strategies, infrastructure\n` +
     `- /backend-security — auth, OWASP Top 10, secrets management, API hardening\n` +
     `- /ai-provider — LLM integration (OpenAI, Gemini, Anthropic), streaming, RAG\n` +
-    `- /self-test — run Claudex's own quality checks\n` +
+    `- /self-test — run Axolot's own quality checks\n` +
     `- /token-saver — optimize token consumption, set budgets, tune effort vs cost\n` +
     `- AskUserQuestion — when you need clarification\n` +
     `\n### Destructive Operations\n` +
@@ -1122,7 +1122,7 @@ function nativeSystemPrompt(
 
   const frontendStandardsPrompt =
     `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
-    `### frontend-design skill (official Claude Code, always active)\n` +
+    `### frontend-design skill (always active)\n` +
     `${FRONTEND_DESIGN_PROMPT}`
 
   // Process dynamic boundary: split into static prefix + dynamic suffix
@@ -1143,7 +1143,7 @@ function nativeSystemPrompt(
   return [
     identity,
     ...systemPrompt,
-    claudeQualityInstructions + frontendStandardsPrompt,
+    qualityPrompt + frontendStandardsPrompt,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -1163,7 +1163,7 @@ function parseToolArguments(value: string): Record<string, unknown> {
 
 function limitNativeHistory(messages: Message[]): Message[] {
   const limit = readPositiveIntEnv(
-    'CLAUDEX_NATIVE_HISTORY_MESSAGES',
+    'AXOLOT_NATIVE_HISTORY_MESSAGES',
     DEFAULT_NATIVE_HISTORY_MESSAGES,
   )
   if (messages.length <= limit) return messages
@@ -1213,7 +1213,7 @@ function compressHistory(messages: Message[], maxTurns: number): string | null {
 function compactNativeToolDescription(description: string | undefined): string | undefined {
   if (!description) return description
   const limit = readPositiveIntEnv(
-    'CLAUDEX_NATIVE_TOOL_DESCRIPTION_CHARS',
+    'AXOLOT_NATIVE_TOOL_DESCRIPTION_CHARS',
     DEFAULT_NATIVE_TOOL_DESCRIPTION_CHARS,
   )
   const normalized = description.replace(/\s+/g, ' ').trim()
@@ -1229,7 +1229,7 @@ function compactNativeInputSchema(schema: Record<string, unknown>): Record<strin
 
 function truncateNativeToolResult(output: string): string {
   const limit = readPositiveIntEnv(
-    'CLAUDEX_NATIVE_TOOL_RESULT_CHARS',
+    'AXOLOT_NATIVE_TOOL_RESULT_CHARS',
     DEFAULT_NATIVE_TOOL_RESULT_CHARS,
   )
   if (output.length <= limit) return output
@@ -1260,7 +1260,7 @@ function truncateNativeToolResult(output: string): string {
   }
 
   // Fallback: plain truncation with context hint
-  return `${truncated}\n\n[Claudex truncated this tool result for speed/token usage (${output.length} chars total, showing first ${limit}). Use Read with offset/limit or a narrower command if more content is needed.]`
+  return `${truncated}\n\n[Axolot truncated this tool result for speed/token usage (${output.length} chars total, showing first ${limit}). Use Read with offset/limit or a narrower command if more content is needed.]`
 }
 
 async function fetchWithRetry(

@@ -22,6 +22,7 @@ tempCodeRunnerFile.ps1
 .claude/plugins/
 .claude/run/
 .claude_tmp/
+.axolot_tmp/
 .openclaw/
 .codex/
 .gemini/
@@ -31,11 +32,14 @@ proxy-output.log
 claudegpt-run.log
 src/tsc-errors.txt
 
-# Claudex local user config and auth
+# Axolot local user config and auth
+.axolotrc
+.axolotrc.json
 .claudexrc
 .claudexrc.json
 direct-providers.json
-claude-runtime/
+axolot-runtime/
+axolot-runtime/
 
 # Environment files and local secrets
 .env

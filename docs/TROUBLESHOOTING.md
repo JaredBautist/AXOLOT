@@ -1,21 +1,21 @@
 # Troubleshooting
 
-## 1) `claudex` no se reconoce
+## 1) `axolot` no se reconoce
 
 ### Sintoma
 
-`Get-Command claudex` no devuelve resultado.
+`Get-Command axolot` no devuelve resultado.
 
 ### Acciones
 
 1. Ejecutar instalador:
 
 ```powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-axolot.ps1
 ```
 
 2. Cerrar y abrir terminal.
-3. Revalidar con `Get-Command claudex`.
+3. Revalidar con `Get-Command axolot`.
 
 ## 2) `bun` no encontrado
 
@@ -49,9 +49,9 @@ Error de launcher indicando que `openclaw` no esta en PATH.
 Get-Command openclaw
 ```
 
-3. Reintentar `claudex`.
+3. Reintentar `axolot`.
 
-## 4) Error en `.claudexrc`
+## 4) Error en `.axolotrc`
 
 ### Sintoma
 
@@ -62,15 +62,15 @@ El launcher falla con mensaje de perfil inexistente o JSON invalido.
 1. Validar JSON:
 
 ```powershell
-Get-Content .\.claudexrc.json | ConvertFrom-Json
+Get-Content .\.axolotrc.json | ConvertFrom-Json
 ```
 
-2. Confirmar que `CLAUDEX_PROFILE` existe en `profiles`.
+2. Confirmar que `AXOLOT_PROFILE` existe en `profiles`.
 3. Probar sin perfil:
 
 ```powershell
-Remove-Item Env:CLAUDEX_PROFILE -ErrorAction SilentlyContinue
-claudex
+Remove-Item Env:AXOLOT_PROFILE -ErrorAction SilentlyContinue
+axolot
 ```
 
 ## 5) Skills pack no cargada
@@ -90,17 +90,17 @@ Get-ChildItem .\skillpacks
 2. Probar pack default:
 
 ```powershell
-$env:CLAUDEX_SKILLS_PACK='token-lean'
-claudex
+$env:AXOLOT_SKILLS_PACK='token-lean'
+axolot
 ```
 
-3. Si usas perfil en `.claudexrc`, revisar `skillsPack` del perfil.
+3. Si usas perfil en `.axolotrc`, revisar `skillsPack` del perfil.
 
 ## 6) Error 401/403 en proxy
 
 ### Sintoma
 
-`.claude_tmp/logs/proxy-output.log` muestra respuesta upstream con autorizacion fallida.
+`.axolot_tmp/logs/proxy-output.log` muestra respuesta upstream con autorizacion fallida.
 
 ### Acciones
 
@@ -113,7 +113,7 @@ Ejemplo rapido (solo sesion actual):
 ```powershell
 $env:UPSTREAM_AUTH='tu_token'
 $env:UPSTREAM_AUTH_HEADER='authorization'  # o 'x-api-key'
-claudex
+axolot
 ```
 
 Nota: si aparece `selected model ... may not exist` y en el log hay mezcla de `404` + `401 Unauthorized`, el problema real suele ser autenticacion al upstream.
@@ -130,8 +130,8 @@ El proxy falla al iniciar con mensaje de `UPSTREAM_URL blocked by security polic
 2. Si necesitas remoto de forma explicita:
 
 ```powershell
-$env:CLAUDEX_UPSTREAM_LOCAL_ONLY='0'
-claudex
+$env:AXOLOT_UPSTREAM_LOCAL_ONLY='0'
+axolot
 ```
 
 3. No usar tokens productivos en hosts no confiables.
@@ -165,7 +165,7 @@ Interfaz visible, pero requests sin respuesta.
 ### Acciones
 
 1. Verificar que gateway escucha en `18789`.
-2. Revisar `.claude_tmp/logs/proxy-output.log`.
+2. Revisar `.axolot_tmp/logs/proxy-output.log`.
 3. Probar upstream manual con curl/httpie si aplica.
 4. Reintentar con arranque manual por etapas (ver `docs/OPERATIONS.md`).
 
@@ -178,7 +178,7 @@ La TUI pide aprobaciones frecuentes.
 ### Acciones
 
 1. Revisar `CLAUDE_CODE_WORKSPACE_HOST_PATHS`.
-2. Verificar configuracion local en `.claude_tmp`.
+2. Verificar configuracion local en `.axolot_tmp`.
 3. Alinear politicas de permisos segun entorno de trabajo.
 
 ## 11) Aviso `UPSTREAM_AUTH no esta definido`
@@ -196,7 +196,7 @@ Al iniciar aparece:
 
 ```powershell
 $env:UPSTREAM_AUTH='tu_token'
-claudex
+axolot
 ```
 
 ## 12) Error `No se puede sobrescribir la variable Host`
@@ -217,17 +217,17 @@ Version vieja del launcher local.
 2. Reinstalar launcher:
 
 ```powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-axolot.ps1
 ```
 
-3. Abrir una terminal nueva y probar `claudex`.
+3. Abrir una terminal nueva y probar `axolot`.
 
 ## Checklist minimo de diagnostico
 
 ```powershell
-Get-Command claudex
+Get-Command axolot
 Get-Command bun
 Get-Command openclaw
 netstat -ano | findstr 18789
-Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
+Get-Content .\.axolot_tmp\logs\proxy-output.log -Tail 80
 ```

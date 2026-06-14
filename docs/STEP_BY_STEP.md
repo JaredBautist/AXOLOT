@@ -1,6 +1,6 @@
 # Guia Step by Step (Windows)
 
-Esta guia deja Claudex listo para usar desde cualquier carpeta con `claudex`.
+Esta guia deja Axolot listo para usar desde cualquier carpeta con `axolot`.
 
 ## 1) Requisitos
 
@@ -21,28 +21,28 @@ Desde la raiz del repo:
 bun install
 ```
 
-## 3) Instalar comando global `claudex`
+## 3) Instalar comando global `axolot`
 
 ```powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-claudex.ps1
+powershell -NoLogo -ExecutionPolicy Bypass -File .\scripts\install-axolot.ps1
 ```
 
 Valida:
 
 ```powershell
-Get-Command claudex
+Get-Command axolot
 ```
 
 ## 4) (Opcional) Crear config por perfiles
 
 ```powershell
-Copy-Item .\.claudexrc.example.json .\.claudexrc.json
+Copy-Item .\.axolotrc.example.json .\.axolotrc.json
 ```
 
 Perfil recomendado:
 
 ```powershell
-$env:CLAUDEX_PROFILE='openai'
+$env:AXOLOT_PROFILE='openai'
 ```
 
 ## 5) (Opcional) Elegir pack de skills
@@ -50,7 +50,7 @@ $env:CLAUDEX_PROFILE='openai'
 `token-lean` ahorra tokens. `engineering-pro` da mas cobertura tecnica.
 
 ```powershell
-$env:CLAUDEX_SKILLS_PACK='token-lean'
+$env:AXOLOT_SKILLS_PACK='token-lean'
 ```
 
 ## 6) Configurar token solo si tu gateway lo requiere
@@ -63,31 +63,31 @@ $env:UPSTREAM_AUTH='tu_token'
 
 Si no pide auth, no pongas nada.
 
-## 7) Ejecutar Claudex
+## 7) Ejecutar Axolot
 
 ```powershell
-claudex
+axolot
 ```
 
 ## 8) Entender mensajes comunes al arrancar
 
 - `Aviso: UPSTREAM_AUTH no esta definido`: normal si tu gateway no requiere token.
 - `Gateway ... ya estaba escuchando`: normal, significa que ya estaba corriendo.
-- `Skills pack '<x>' no existe`: revisa `CLAUDEX_SKILLS_PACK` o usa `token-lean`.
+- `Skills pack '<x>' no existe`: revisa `AXOLOT_SKILLS_PACK` o usa `token-lean`.
 
 ## 9) Limitar gasto por sesion (recomendado)
 
 Directo en comando:
 
 ```powershell
-claudex --max-budget-usd 2
+axolot --max-budget-usd 2
 ```
 
 O por variable:
 
 ```powershell
-$env:CLAUDEX_MAX_BUDGET_USD='2'
-claudex
+$env:AXOLOT_MAX_BUDGET_USD='2'
+axolot
 ```
 
 ## 10) Si algo falla
@@ -95,7 +95,7 @@ claudex
 1. Ejecuta:
 
 ```powershell
-Get-Command claudex
+Get-Command axolot
 Get-Command bun
 Get-Command openclaw
 ```
@@ -103,7 +103,7 @@ Get-Command openclaw
 2. Revisa logs:
 
 ```powershell
-Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
+Get-Content .\.axolot_tmp\logs\proxy-output.log -Tail 80
 ```
 
 3. Consulta:

@@ -625,7 +625,7 @@ export async function main() {
     const tools = await getTools();
     const commands = await getCommands(process.cwd());
     const { ALL_MODEL_CONFIGS } = await import('./utils/model/configs.js');
-    const mainLoopModel = process.env.CLAUDEX_OPENCLAW_MODE === '1'
+    const mainLoopModel = process.env.AXOLOT_OPENCLAW_MODE === '1'
       ? 'openclaw'
       : process.env.UPSTREAM_MODEL || process.env.ANTHROPIC_MODEL || ALL_MODEL_CONFIGS.sonnet46.firstParty;
     const { getEffortEnvOverride, getInitialEffortSetting } = await import('./utils/effort.js');
@@ -1051,7 +1051,7 @@ async function run(): Promise<CommanderCommand> {
     }
     profileCheckpoint('preAction_after_settings_sync');
   });
-  program.name('claudex').description(`Claudex v1.0.0 - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
+  program.name('axolot').description(`Axolot v1.0.0 - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
   // Subcommands inherit helpOption via commander's copyInheritedSettings —
   // setting it once here covers mcp, plugin, auth, and all other subcommands.
   .helpOption('-h, --help', 'Display help for command').option('-d, --debug [filter]', 'Enable debug mode with optional category filtering (e.g., "api,hooks" or "!1p,!file")', (_value: string | true) => {
@@ -3897,7 +3897,7 @@ async function run(): Promise<CommanderCommand> {
         pendingHookMessages
       }, renderAndRun);
     }
-  }).version('Claudex v1.0.0', '-v, --version', 'Output the version number');
+  }).version('Axolot v1.0.0', '-v, --version', 'Output the version number');
 
   // Worktree flags
   program.option('-w, --worktree [name]', 'Create a new git worktree for this session (optionally specify a name)');

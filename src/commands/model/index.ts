@@ -6,7 +6,7 @@ export default {
   type: 'local-jsx',
   name: 'model',
   get description() {
-    return `Select AI provider/model for Claudex (currently ${renderModelName(getMainLoopModel())})`
+    return `Select AI provider/model for Axolot (currently ${renderModelName(getMainLoopModel())})`
   },
   argumentHint: '[model]',
   get immediate() {

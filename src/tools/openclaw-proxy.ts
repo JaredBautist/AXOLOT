@@ -5,14 +5,14 @@ import { dirname } from 'path';
 const PORT = parseInt(process.env.PROXY_PORT || '8787', 10);
 const UPSTREAM_BASE = (process.env.UPSTREAM_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:18789';
 const OLLAMA_BASE = (process.env.OLLAMA_BASE_URL || '').replace(/\/$/, '') || 'http://127.0.0.1:11434';
-const OLLAMA_DIRECT = process.env.CLAUDEX_OLLAMA_DIRECT !== '0';
+const OLLAMA_DIRECT = process.env.AXOLOT_OLLAMA_DIRECT !== '0';
 const UPSTREAM_MODEL = process.env.UPSTREAM_MODEL || 'openclaw';
 const UPSTREAM_PROVIDER = (process.env.UPSTREAM_PROVIDER || '').trim().toLowerCase();
 const UPSTREAM_AUTH = process.env.UPSTREAM_AUTH || '';
 const UPSTREAM_AUTH_HEADER = (process.env.UPSTREAM_AUTH_HEADER || 'authorization').trim().toLowerCase();
 const UPSTREAM_CHAT_PATH = (process.env.UPSTREAM_CHAT_PATH || '').trim();
-const LOG_FILE = process.env.CLAUDEX_PROXY_LOG || '.claude_tmp/logs/proxy-output.log';
-const LOCAL_UPSTREAM_ONLY = process.env.CLAUDEX_UPSTREAM_LOCAL_ONLY !== '0';
+const LOG_FILE = process.env.AXOLOT_PROXY_LOG || '.axolot_tmp/logs/proxy-output.log';
+const LOCAL_UPSTREAM_ONLY = process.env.AXOLOT_UPSTREAM_LOCAL_ONLY !== '0';
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 
 function redactSecrets(input: string) {
@@ -49,7 +49,7 @@ function assertUpstreamSafety() {
 
   const host = parsed.hostname.toLowerCase();
   if (!LOCAL_HOSTS.has(host)) {
-    throw new Error(`UPSTREAM_URL blocked by security policy (non-local host): ${UPSTREAM_BASE}. Set CLAUDEX_UPSTREAM_LOCAL_ONLY=0 to allow remote hosts.`);
+    throw new Error(`UPSTREAM_URL blocked by security policy (non-local host): ${UPSTREAM_BASE}. Set AXOLOT_UPSTREAM_LOCAL_ONLY=0 to allow remote hosts.`);
   }
 }
 

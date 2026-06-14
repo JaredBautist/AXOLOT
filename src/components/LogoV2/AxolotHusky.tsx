@@ -14,7 +14,7 @@ const BOW = '#FA0000'
  * Compact husky face with red bow, rendered in 4 rows.
  * Designed to replace the Clawd mascot in the LogoV2 layout.
  */
-export function ClaudexHusky({ compact }: Props): React.ReactNode {
+export function AxolotHusky({ compact }: Props): React.ReactNode {
   if (compact) {
     return (
       <Text color={BODY}>

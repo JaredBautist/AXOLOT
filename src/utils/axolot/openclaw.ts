@@ -13,15 +13,15 @@ export type OpenClawModel = {
   tags: string[]
 }
 
-export function isClaudexOpenClawMode(): boolean {
+export function isAxolotOpenClawMode(): boolean {
   return (
-    process.env.CLAUDEX_OPENCLAW_MODE === '1' ||
-    process.env.CLAUDEX_NATIVE_MODE === '1'
+    process.env.AXOLOT_OPENCLAW_MODE === '1' ||
+    process.env.AXOLOT_NATIVE_MODE === '1'
   )
 }
 
-export function isClaudexNativeMode(): boolean {
-  return process.env.CLAUDEX_NATIVE_MODE === '1'
+export function isAxolotNativeMode(): boolean {
+  return process.env.AXOLOT_NATIVE_MODE === '1'
 }
 
 export function runOpenClaw(args: string[]): {
@@ -42,7 +42,7 @@ export function runOpenClaw(args: string[]): {
 }
 
 export function runOpenClawInteractive(args: string[]): { ok: boolean } {
-  if (isClaudexNativeMode()) {
+  if (isAxolotNativeMode()) {
     return { ok: false }
   }
 
@@ -90,7 +90,7 @@ export function getOpenClawConfig(path: string): string {
 }
 
 export function getOpenClawPrimaryModel(): string {
-  if (isClaudexNativeMode()) {
+  if (isAxolotNativeMode()) {
     return process.env.ANTHROPIC_MODEL || directModelRef()
   }
 
@@ -115,18 +115,18 @@ export function getOpenClawPrimaryModel(): string {
 }
 
 export function getOpenClawProviderLabel(model: string | null): string {
-  if (isClaudexNativeMode()) {
+  if (isAxolotNativeMode()) {
     const id = model || getOpenClawPrimaryModel()
     const provider = id.includes('/') ? id.split('/')[0] : id
 
-    if (id === 'openclaw' || process.env.CLAUDEX_NEEDS_PROVIDER_SETUP === '1') {
+    if (id === 'openclaw' || process.env.AXOLOT_NEEDS_PROVIDER_SETUP === '1') {
       return 'Select your provider and model'
     }
     if (provider === 'openai') return 'OpenAI'
     if (provider === 'gemini' || provider === 'google') return 'Gemini'
     if (provider === 'deepseek') return 'DeepSeek'
     if (provider === 'minimax') return 'MiniMax'
-    if (provider === 'claude' || provider === 'anthropic') return 'Claude API'
+    if (provider === 'claude' || provider === 'anthropic') return 'Anthropic API'
     return 'Native provider'
   }
 
@@ -145,9 +145,9 @@ export function getOpenClawProviderLabel(model: string | null): string {
 }
 
 export function listOpenClawModels(): OpenClawModel[] {
-  if (isClaudexNativeMode()) {
+  if (isAxolotNativeMode()) {
     const models = [
-      directModel('claude', 'claude-3-5-sonnet-latest', 'Claude API'),
+      directModel('claude', 'claude-3-5-sonnet-latest', 'Anthropic API'),
       directModel('gemini', 'gemini-2.5-pro', 'Gemini'),
       directModel('gemini', 'gemini-1.5-flash', 'Gemini'),
       directModel('deepseek', 'deepseek-v4-flash', 'DeepSeek V4 Flash'),
@@ -208,9 +208,9 @@ export function setOpenClawModel(model: string): {
   ok: boolean
   message: string
 } {
-  if (isClaudexNativeMode()) {
+  if (isAxolotNativeMode()) {
     setDirectModel(model)
-    return { ok: true, message: `Set Claudex model to ${model}` }
+    return { ok: true, message: `Set Axolot model to ${model}` }
   }
 
   const result = runOpenClaw(['models', 'set', model])
@@ -228,7 +228,7 @@ export function setOpenClawModel(model: string): {
 }
 
 const directStore = new Conf({
-  projectName: 'claudex',
+  projectName: 'axolot',
   configName: 'direct-providers',
 })
 
@@ -267,7 +267,7 @@ function setDirectModel(modelRef: string): void {
 
   directStore.set('activeProvider', provider)
   directStore.set(`models.${provider}`, model)
-  process.env.CLAUDEX_NATIVE_PROVIDER = provider
+  process.env.AXOLOT_NATIVE_PROVIDER = provider
   process.env.ANTHROPIC_MODEL = `${provider}/${model}`
 }
 

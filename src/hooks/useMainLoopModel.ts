@@ -1,7 +1,7 @@
 import { useEffect, useReducer } from 'react'
 import { onGrowthBookRefresh } from '../services/analytics/growthbook.js'
 import { useAppState } from '../state/AppState.js'
-import { isClaudexOpenClawMode } from '../utils/claudex/openclaw.js'
+import { isAxolotOpenClawMode } from '../utils/axolot/openclaw.js'
 import {
   getDefaultMainLoopModelSetting,
   type ModelName,
@@ -27,7 +27,7 @@ export function useMainLoopModel(): ModelName {
   useEffect(() => onGrowthBookRefresh(forceRerender), [])
 
   if (
-    isClaudexOpenClawMode() &&
+    isAxolotOpenClawMode() &&
     !mainLoopModelForSession &&
     (!mainLoopModel || mainLoopModel === 'openclaw')
   ) {

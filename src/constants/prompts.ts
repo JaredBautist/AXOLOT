@@ -218,7 +218,7 @@ function getSimpleDoingTasksSection(): string {
   ]
 
   const userHelpSubitems = [
-    `/help: Get help with using Claude Code`,
+    `/help: Get help with using Axolot`,
     `To give feedback, users should ${MACRO.ISSUES_EXPLAINER}`,
   ]
 
@@ -239,13 +239,13 @@ function getSimpleDoingTasksSection(): string {
     `Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it. Prioritize writing safe, secure, and correct code.`,
     `Intellectual Honesty (MANDATORY): Never fabricate test results, file contents, API responses, command output, or error messages. If you didn't read it, you don't know it. If you didn't run it, you don't know the result. Distinguish between what you read vs. what you infer. "I don't know" is better than confidently wrong. When reporting outcomes, accuracy is non-negotiable — show real output, not what you expected.`,
     `Bold Execution: Be audacious. You're an expert engineer, not a suggestion bot. Make decisions, execute them, verify them. When you're 80% sure, just do it — don't present multiple options unless tradeoffs are genuinely significant. When something is wrong, push back. When you see a better path, take it. Own the outcome.`,
-    `Spec-Driven Development: Before implementing non-trivial work, check if .claudex/SPEC.md exists and read it for requirements, design, and task definitions. If it doesn't exist, offer to run /spec init or create a lightweight spec. Keep the spec in sync with actual implementation — update requirements as you discover them, mark tasks done as you complete them, log session summaries to .claudex/memory/.`,
+    `Spec-Driven Development: Before implementing non-trivial work, check if .axolot/SPEC.md exists and read it for requirements, design, and task definitions. If it doesn't exist, offer to run /spec init or create a lightweight spec. Keep the spec in sync with actual implementation — update requirements as you discover them, mark tasks done as you complete them, log session summaries to .axolot/memory/.`,
     ...codeStyleSubitems,
     `Avoid backwards-compatibility hacks like renaming unused _vars, re-exporting types, adding // removed comments for removed code, etc. If you are certain that something is unused, you can delete it completely.`,
     `Report outcomes faithfully (MANDATORY): If tests fail, show the failure output. If you didn't run a verification step, say so — don't imply it passed. Never claim "all tests pass" when output shows failures. Never suppress, simplify, or fabricate failing checks to manufacture a green result. Never characterize incomplete or broken work as done. When a check passes or a task is complete, state it plainly — don't hedge confirmed results. The goal is an accurate report, not a defensive one.`,
     ...(process.env.USER_TYPE === 'ant'
       ? [
-          `If the user reports a bug, slowness, or unexpected behavior with Claude Code itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with Claude Code. After /share produces a ccshare link, if you have a Slack MCP tool available, offer to post the link to #claude-code-feedback (channel ID C07VBSHV7EV) for the user.`,
+          `If the user reports a bug, slowness, or unexpected behavior with Axolot itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with Axolot.`,
         ]
       : []),
     `If the user asks for help or wants to give feedback inform them of the following:`,
@@ -452,7 +452,7 @@ export async function getSystemPrompt(
 ): Promise<string[]> {
   if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
     return [
-      `You are Claude Code, Anthropic's official CLI for Claude.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
+      `You are Axolot, an elite terminal AI coding assistant.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
     ]
   }
 
@@ -529,7 +529,7 @@ ${CYBER_RISK_INSTRUCTION}`,
     ),
     systemPromptSection('project_spec', () => {
       try {
-        const specPath = join(getCwd(), '.claudex', 'SPEC.md')
+        const specPath = join(getCwd(), '.axolot', 'SPEC.md')
         const content = readFileSync(specPath, 'utf-8')
         return `## Project Spec\n\n\`\`\`\n${content.slice(0, 6000)}\n\`\`\``
       } catch {
@@ -558,7 +558,7 @@ ${CYBER_RISK_INSTRUCTION}`,
       return parts.length > 0 ? parts.join('\n\n') : null
     }),
     systemPromptSection('project_instructions', () => {
-      const instrDir = join(getCwd(), '.claudex', 'instructions')
+      const instrDir = join(getCwd(), '.axolot', 'instructions')
       try {
         const files = readdirSync(instrDir).filter(f => f.endsWith('.md'))
         if (files.length === 0) return null
@@ -573,7 +573,7 @@ ${CYBER_RISK_INSTRUCTION}`,
     }),
     systemPromptSection('session_state', () => {
       try {
-        const sessionPath = join(getCwd(), '.claudex', 'session.json')
+        const sessionPath = join(getCwd(), '.axolot', 'session.json')
         const content = readFileSync(sessionPath, 'utf-8')
         const state = JSON.parse(content)
         const lines: string[] = ['## Previous Session State\n']
@@ -758,10 +758,10 @@ export async function computeSimpleEnvInfo(
       : `The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.opus}', Sonnet 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.sonnet}', Haiku 4.5: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.haiku}'. When building AI applications, default to the latest and most capable Claude models.`,
     process.env.USER_TYPE === 'ant' && isUndercover()
       ? null
-      : `Claude Code is available as a CLI in the terminal, desktop app (Mac/Windows), web app (claude.ai/code), and IDE extensions (VS Code, JetBrains).`,
+      : `Axolot is available as a CLI in the terminal.`,
     process.env.USER_TYPE === 'ant' && isUndercover()
       ? null
-      : `Fast mode for Claude Code uses the same ${FRONTIER_MODEL_NAME} model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`,
+      : `Fast mode for Axolot uses the same ${FRONTIER_MODEL_NAME} model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`,
   ].filter(item => item !== null)
 
   return [
@@ -817,7 +817,7 @@ export function getUnameSR(): string {
   return `${osType()} ${osRelease()}`
 }
 
-export const DEFAULT_AGENT_PROMPT = `You are an agent for Claude Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
+export const DEFAULT_AGENT_PROMPT = `You are an agent for Axolot. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
 
 export async function enhanceSystemPromptWithEnvDetails(
   existingSystemPrompt: string[],

@@ -2,18 +2,22 @@
 .claude/
 src/.claude/
 .claude_tmp/
+.axolot_tmp/
 .openclaw/
 .codex/
 .gemini/
 .aider*
 workspace/
 memory/
-claude-runtime/
+axolot-runtime/
 
 # Local config, auth, and secrets
+.axolotrc
+.axolotrc.json
 .claudexrc
 .claudexrc.json
 direct-providers.json
+axolot-runtime/
 .env
 .env.*
 !.env.example

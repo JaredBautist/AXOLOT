@@ -2,13 +2,13 @@ import { registerBundledSkill } from '../bundledSkills.js'
 
 const ONBOARD_SKILL_PROMPT = `# Onboard Skill — First Steps Guide
 
-Use this skill to guide new users through setting up and using Claudex for the first time.
+Use this skill to guide new users through setting up and using Axolot for the first time.
 
 ## Onboarding Flow
 
 ### Step 1: Choose a Provider
 Ask the user which AI provider they want to use:
-- **Claude (Anthropic)**: Best for coding, long context, tool use — recommended
+- **Anthropic**: Best for coding, long context, tool use — recommended
 - **OpenAI (ChatGPT)**: Fast, widely available, good all-around
 - **Gemini (Google)**: Free tier available, good for experimentation
 
@@ -17,7 +17,7 @@ Guide the user through authentication:
 
 **For API Key:**
 \`\`\`sh
-claudex auth <provider>
+axolot auth <provider>
 # Then paste your API key when prompted
 \`\`\`
 
@@ -31,12 +31,12 @@ export GEMINI_API_KEY="..."
 ### Step 3: Select Model
 \`\`\`sh
 # See available models
-claudex use <provider>
+axolot use <provider>
 
 # Set a specific model
-claudex use claude claude-sonnet-4-6
-claudex use openai gpt-4o
-claudex use gemini gemini-2.5-pro
+axolot use anthropic sonnet
+axolot use openai gpt-4o
+axolot use gemini gemini-2.5-pro
 \`\`\`
 
 Or inside the TUI, use \`/model\` to interactively choose provider and model.
@@ -44,10 +44,10 @@ Or inside the TUI, use \`/model\` to interactively choose provider and model.
 ### Step 4: Try Your First Prompt
 \`\`\`sh
 # Quick chat (no TUI)
-claudex chat "hello, who are you?"
+axolot chat "hello, who are you?"
 
 # Open the TUI
-claudex
+axolot
 \`\`\`
 
 ### Step 5: Learn the Skills
@@ -80,7 +80,7 @@ Control token usage and response depth:
 - Offer choices instead of assuming
 - Verify the setup works (run a test prompt) before declaring success
 - If something fails, help debug — check API key validity, network, PATH
-- Point to \`claudex --help\` for CLI reference, \`/help\` inside TUI for slash commands`
+- Point to \`axolot --help\` for CLI reference, \`/help\` inside TUI for slash commands`
 
 export function registerOnboardSkill(): void {
   registerBundledSkill({
@@ -88,7 +88,7 @@ export function registerOnboardSkill(): void {
     description:
       'Interactive first-steps guide: provider setup, authentication, model selection, and skill discovery.',
     whenToUse:
-      'Use when the user seems new to Claudex: asks "how do I start", "how to configure", "first time", "setup", "help getting started", or when no provider is configured yet.',
+      'Use when the user seems new to Axolot: asks "how do I start", "how to configure", "first time", "setup", "help getting started", or when no provider is configured yet.',
     aliases: ['setup', 'getting-started', 'welcome', 'help'],
     userInvocable: true,
     async getPromptForCommand(args) {

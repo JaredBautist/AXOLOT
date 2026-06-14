@@ -7,7 +7,7 @@ import { stringWidth } from '../../ink/stringWidth.js';
 import { getLayoutMode, calculateLayoutDimensions, calculateOptimalLeftWidth, formatWelcomeMessage, truncatePath, getRecentActivitySync, getRecentReleaseNotesSync, getLogoDisplayData } from '../../utils/logoV2Utils.js';
 import { truncate } from '../../utils/format.js';
 import { getDisplayPath } from '../../utils/file.js';
-import { ClaudexASCIILogo } from '../ClaudexASCIILogo.js';
+import { AxolotASCIILogo } from '../AxolotASCIILogo.js';
 import { FeedColumn } from './FeedColumn.js';
 import { createRecentActivityFeed, createWhatsNewFeed, createProjectOnboardingFeed, createGuestPassesFeed } from './feedConfigs.js';
 import { getGlobalConfig, saveGlobalConfig } from 'src/utils/config.js';
@@ -164,7 +164,7 @@ export function LogoV2() {
     billingType: rawBillingType,
     agentName: agentNameFromSettings
   } = getLogoDisplayData();
-  const billingType = process.env.CLAUDEX_OPENCLAW_MODE === '1' ? 'OpenClaw' : rawBillingType;
+  const billingType = process.env.AXOLOT_OPENCLAW_MODE === '1' ? 'OpenClaw' : rawBillingType;
   const agentName = agent ?? agentNameFromSettings;
   const effortSuffix = getEffortSuffix(model, effortValue);
   const t9 = fullModelDisplayName + effortSuffix;
@@ -249,8 +249,8 @@ export function LogoV2() {
   }
   const layoutMode = getLayoutMode(columns);
   const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-  const borderTitle = ` ${color("claude", userTheme)("Claudex")} ${color("inactive", userTheme)("v1.0.0")} `;
-  const compactBorderTitle = color("claude", userTheme)(" Claudex ");
+  const borderTitle = ` ${color("claude", userTheme)("Axolot")} ${color("inactive", userTheme)("v1.0.0")} `;
+  const compactBorderTitle = color("claude", userTheme)(" Axolot ");
   if (layoutMode === "compact") {
     let welcomeMessage = formatWelcomeMessage(username);
     if (stringWidth(welcomeMessage) > columns - 4) {
@@ -371,7 +371,7 @@ export function LogoV2() {
   }
   let t19;
   if ($[48] === Symbol.for("react.memo_cache_sentinel")) {
-    t19 = <ClaudexASCIILogo />;
+    t19 = <AxolotASCIILogo />;
     $[48] = t19;
   } else {
     t19 = $[48];

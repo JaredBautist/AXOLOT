@@ -59,7 +59,7 @@ function emptyState(): LearningState {
 }
 
 export function getLearningDir(cwd = getCwd()): string {
-  return join(cwd, '.claudex', 'learning')
+  return join(cwd, '.axolot', 'learning')
 }
 
 export function getLearningStatePath(cwd = getCwd()): string {

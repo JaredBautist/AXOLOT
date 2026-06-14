@@ -17,23 +17,23 @@ export type Step = {
 }
 
 export function getSteps(): Step[] {
-  const hasClaudeMd = getFsImplementation().existsSync(
-    join(getCwd(), 'CLAUDEX.md'),
+  const hasAxolotMd = getFsImplementation().existsSync(
+    join(getCwd(), 'AXOLOT.md'),
   )
   const isWorkspaceDirEmpty = isDirEmpty(getCwd())
 
   return [
     {
       key: 'workspace',
-      text: 'Ask Claude to create a new app or clone a repository',
+      text: 'Ask Axolot to create a new app or clone a repository',
       isComplete: false,
       isCompletable: true,
       isEnabled: isWorkspaceDirEmpty,
     },
     {
-      key: 'claudemd',
-      text: 'Run /init to create a CLAUDEX.md file with instructions for Claudex',
-      isComplete: hasClaudeMd,
+      key: 'axolotmd',
+      text: 'Run /init to create a AXOLOT.md file with instructions for Axolot',
+      isComplete: hasAxolotMd,
       isCompletable: true,
       isEnabled: !isWorkspaceDirEmpty,
     },

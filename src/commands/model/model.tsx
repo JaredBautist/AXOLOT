@@ -2,7 +2,7 @@ import { c as _c } from "react/compiler-runtime";
 import chalk from 'chalk';
 import * as React from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
-import { ClaudexOpenClawModelPicker } from '../../components/ClaudexOpenClawModelPicker.js';
+import { AxolotOpenClawModelPicker } from '../../components/AxolotOpenClawModelPicker.js';
 import { ModelPicker } from '../../components/ModelPicker.js';
 import { COMMON_HELP_ARGS, COMMON_INFO_ARGS } from '../../constants/xml.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from '../../services/analytics/index.js';
@@ -16,7 +16,7 @@ import { checkOpus1mAccess, checkSonnet1mAccess } from '../../utils/model/check1
 import { getDefaultMainLoopModelSetting, isOpus1mMergeEnabled, renderDefaultModelSetting } from '../../utils/model/model.js';
 import { isModelAllowed } from '../../utils/model/modelAllowlist.js';
 import { validateModel } from '../../utils/model/validateModel.js';
-import { isClaudexNativeMode, isClaudexOpenClawMode, runOpenClawInteractive, setOpenClawModel } from '../../utils/claudex/openclaw.js';
+import { isAxolotNativeMode, isAxolotOpenClawMode, runOpenClawInteractive, setOpenClawModel } from '../../utils/axolot/openclaw.js';
 function ModelPickerWrapper(t0) {
   const $ = _c(17);
   const {
@@ -177,7 +177,7 @@ function SetModelAndClose({
       }
 
       // Validate and set custom model
-      if (isClaudexOpenClawMode()) {
+      if (isAxolotOpenClawMode()) {
         const result = setOpenClawModel(model);
         if (result.ok) {
           setModel(model);
@@ -285,29 +285,29 @@ function _temp7(s) {
 }
 export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
   args = args?.trim() || '';
-  if (isClaudexOpenClawMode()) {
+  if (isAxolotOpenClawMode()) {
     if (args === 'login' || args === 'auth') {
-      if (isClaudexNativeMode()) {
-        onDone('Run claudex auth claude, claudex auth openai, or claudex auth gemini from your terminal.', {
+      if (isAxolotNativeMode()) {
+        onDone('Run axolot auth anthropic, axolot auth openai, or axolot auth gemini from your terminal.', {
           display: 'system'
         });
         return;
       }
       const result = runOpenClawInteractive(['models', 'auth', 'add']);
-      onDone(result.ok ? 'Provider login finished. Run /model to select a model.' : 'Provider login failed. Run claudex --auth from your terminal to retry.', {
+      onDone(result.ok ? 'Provider login finished. Run /model to select a model.' : 'Provider login failed. Run axolot --auth from your terminal to retry.', {
         display: 'system'
       });
       return;
     }
     if (args === 'setup') {
-      if (isClaudexNativeMode()) {
-        onDone('Use claudex auth <provider> from your terminal, then reopen Claudex.', {
+      if (isAxolotNativeMode()) {
+        onDone('Use axolot auth <provider> from your terminal, then reopen Axolot.', {
           display: 'system'
         });
         return;
       }
       const result = runOpenClawInteractive(['onboard', '--wizard']);
-      onDone(result.ok ? 'OpenClaw setup finished. Run /model to select a model.' : 'OpenClaw setup failed. Run claudex --setup from your terminal to retry.', {
+      onDone(result.ok ? 'OpenClaw setup finished. Run /model to select a model.' : 'OpenClaw setup failed. Run axolot --setup from your terminal to retry.', {
         display: 'system'
       });
       return;
@@ -320,7 +320,7 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
     return <ShowModelAndClose onDone={onDone} />;
   }
   if (COMMON_HELP_ARGS.includes(args)) {
-    onDone(isClaudexOpenClawMode() ? 'Run /model to pick AI provider/model, /model login to connect a provider, or /model [provider/model] to set a model.' : 'Run /model to open the model selection menu, or /model [modelName] to set the model.', {
+    onDone(isAxolotOpenClawMode() ? 'Run /model to pick AI provider/model, /model login to connect a provider, or /model [provider/model] to set a model.' : 'Run /model to open the model selection menu, or /model [modelName] to set the model.', {
       display: 'system'
     });
     return;
@@ -331,8 +331,8 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
     });
     return <SetModelAndClose args={args} onDone={onDone} />;
   }
-  if (isClaudexOpenClawMode()) {
-    return <ClaudexOpenClawModelPicker onDone={onDone} />;
+  if (isAxolotOpenClawMode()) {
+    return <AxolotOpenClawModelPicker onDone={onDone} />;
   }
   return <ModelPickerWrapper onDone={onDone} />;
 };

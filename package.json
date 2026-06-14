@@ -1,11 +1,11 @@
 {
-  "name": "claudex-ai",
+  "name": "axolot-ai",
   "version": "0.1.5",
   "private": false,
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "claudex": "src/direct/chat.js"
+    "axolot": "src/direct/chat.js"
   },
   "engines": {
     "node": ">=20",
@@ -21,7 +21,7 @@
     "README.md",
     "LICENSE",
     "tsconfig.json",
-    "tsconfig.claudex.json",
+    "tsconfig.axolot.json",
     "package.json"
   ],
   "scripts": {
@@ -30,7 +30,7 @@
     "build:full": "bun build src/main.tsx --outdir dist --target bun",
     "start": "node src/direct/chat.js",
     "start:full": "bun run dist/main.js",
-    "typecheck": "tsc --noEmit -p tsconfig.claudex.json",
+    "typecheck": "tsc --noEmit -p tsconfig.axolot.json",
     "typecheck:full": "tsc --noEmit -p tsconfig.json",
     "ollama": "bun run src/tools/ollama-cli.ts",
     "direct": "node src/direct/chat.js",

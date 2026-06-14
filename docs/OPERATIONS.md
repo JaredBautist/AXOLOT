@@ -3,7 +3,7 @@
 ## Arranque estandar
 
 ```powershell
-claudex
+axolot
 ```
 
 Esto inicia los servicios necesarios y abre la TUI.
@@ -11,15 +11,15 @@ Esto inicia los servicios necesarios y abre la TUI.
 Si quieres usar un perfil:
 
 ```powershell
-$env:CLAUDEX_PROFILE='openai'
-claudex
+$env:AXOLOT_PROFILE='openai'
+axolot
 ```
 
 Si quieres cambiar pack de skills:
 
 ```powershell
-$env:CLAUDEX_SKILLS_PACK='engineering-pro'   # o token-lean
-claudex
+$env:AXOLOT_SKILLS_PACK='engineering-pro'   # o token-lean
+axolot
 ```
 
 ## Arranque manual por etapas
@@ -40,7 +40,7 @@ $env:UPSTREAM_URL='http://127.0.0.1:18789'
 $env:UPSTREAM_MODEL='openclaw'
 $env:UPSTREAM_AUTH='<token>'
 $env:UPSTREAM_AUTH_HEADER='authorization'   # o 'x-api-key'
-$env:CLAUDEX_UPSTREAM_LOCAL_ONLY='1'        # default recomendado
+$env:AXOLOT_UPSTREAM_LOCAL_ONLY='1'        # default recomendado
 bun run src/tools/openclaw-proxy.ts
 ```
 
@@ -71,7 +71,7 @@ Get-Process | Where-Object { $_.ProcessName -like '*bun*' -or $_.ProcessName -li
 - Ver logs:
 
 ```powershell
-Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
+Get-Content .\.axolot_tmp\logs\proxy-output.log -Tail 80
 ```
 
 ## Ciclo de release sugerido
@@ -79,7 +79,7 @@ Get-Content .\.claude_tmp\logs\proxy-output.log -Tail 80
 1. `bun run typecheck`
 2. `bun run build`
 3. `bun run smoke:scripts`
-4. Smoke test manual con `claudex`.
+4. Smoke test manual con `axolot`.
 5. Confirmar docs actualizadas.
 6. Commit con mensaje claro.
 7. Tag de version (opcional).
@@ -95,26 +95,26 @@ del arbol completo heredado del upstream.
 - `UPSTREAM_AUTH`: inyectar por secreto local, no hardcode productivo.
 - `UPSTREAM_AUTH_HEADER`: elegir esquema segun gateway (`authorization` o `x-api-key`).
 - `PROXY_PORT`: fijar solo si se integra con tooling externo.
-- `CLAUDEX_UPSTREAM_LOCAL_ONLY=1`: evita exfiltracion accidental de tokens.
-- `CLAUDEX_MAX_BUDGET_USD`: limita gasto por sesion sin pasar flags en cada ejecucion.
-- `CLAUDEX_PROFILE`: selecciona perfil de `.claudexrc`.
-- `CLAUDEX_CONFIG`: ruta explicita del archivo de config.
-- `CLAUDEX_SKILLS_PACK`: pack de skills preconfiguradas (`token-lean`/`engineering-pro`).
+- `AXOLOT_UPSTREAM_LOCAL_ONLY=1`: evita exfiltracion accidental de tokens.
+- `AXOLOT_MAX_BUDGET_USD`: limita gasto por sesion sin pasar flags en cada ejecucion.
+- `AXOLOT_PROFILE`: selecciona perfil de `.axolotrc`.
+- `AXOLOT_CONFIG`: ruta explicita del archivo de config.
+- `AXOLOT_SKILLS_PACK`: pack de skills preconfiguradas (`token-lean`/`engineering-pro`).
 
 ## Perfiles por proyecto
 
 1. Copiar plantilla:
 
 ```powershell
-Copy-Item .\.claudexrc.example.json .\.claudexrc.json
+Copy-Item .\.axolotrc.example.json .\.axolotrc.json
 ```
 
 2. Editar perfiles/modelos.
-3. Elegir perfil con `CLAUDEX_PROFILE`.
+3. Elegir perfil con `AXOLOT_PROFILE`.
 
 Regla de precedencia:
 
-`env vars > perfil .claudexrc > defaults`.
+`env vars > perfil .axolotrc > defaults`.
 
 ## Packs de skills
 
@@ -128,23 +128,23 @@ Ambos se cargan automáticamente con `--add-dir` desde `skillpacks/<pack>/.claud
 - Ad-hoc por sesion:
 
 ```powershell
-claudex --max-budget-usd 2
+axolot --max-budget-usd 2
 ```
 
 - Politica local por entorno:
 
 ```powershell
-$env:CLAUDEX_MAX_BUDGET_USD='2'
-claudex
+$env:AXOLOT_MAX_BUDGET_USD='2'
+axolot
 ```
 
 ## Limpieza de artefactos locales
 
 No versionar:
 
-- `.claude_tmp/`
+- `.axolot_tmp/`
 - `.openclaw/`
-- `.claude_tmp/logs/proxy-output.log`
+- `.axolot_tmp/logs/proxy-output.log`
 - archivos temporales de editor
 
 ## Recuperacion rapida
@@ -152,6 +152,6 @@ No versionar:
 Si el entorno queda inconsistente:
 
 1. Cerrar procesos `bun/openclaw`.
-2. Borrar solo artefactos temporales (`.claude_tmp`, logs).
+2. Borrar solo artefactos temporales (`.axolot_tmp`, logs).
 3. Reabrir terminal.
-4. Ejecutar `claudex` nuevamente.
+4. Ejecutar `axolot` nuevamente.

@@ -1,8 +1,8 @@
 import { registerBundledSkill } from '../bundledSkills.js'
 
-const SELF_TEST_SKILL_PROMPT = `# Self-Test Skill — Claudex Code Quality
+const SELF_TEST_SKILL_PROMPT = `# Self-Test Skill — Axolot Code Quality
 
-Run quality checks on the Claudex project itself.
+Run quality checks on the Axolot project itself.
 
 ## Commands
 
@@ -41,10 +41,10 @@ export function registerSelfTestSkill(): void {
   registerBundledSkill({
     name: 'self-test',
     description:
-      'Run quality checks on the Claudex project: typecheck, build, code analysis.',
+      'Run quality checks on the Axolot project: typecheck, build, code analysis.',
     whenToUse:
-      'Use when the user asks to test, verify, or check Claudex itself. Use before committing changes to Claudex.',
-    aliases: ['check', 'verify-claudex', 'claudex-check'],
+      'Use when the user asks to test, verify, or check Axolot itself. Use before committing changes to Axolot.',
+    aliases: ['check', 'verify-axolot', 'axolot-check'],
     userInvocable: true,
     async getPromptForCommand(args) {
       const parts = [SELF_TEST_SKILL_PROMPT]

@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Eliminar OpenClaw como backend obligatorio y mover Claudex hacia una arquitectura directa: la CLI/TUI debe hablar con los SDKs oficiales de cada proveedor, con streaming nativo y cancelacion real via `AbortController`.
+Eliminar OpenClaw como backend obligatorio y mover Axolot hacia una arquitectura directa: la CLI/TUI debe hablar con los SDKs oficiales de cada proveedor, con streaming nativo y cancelacion real via `AbortController`.
 
 La regla de diseno nueva es: la TUI no debe levantar servidores intermedios para chatear. La seleccion de proveedor vive en una capa limpia de estrategia/fabrica, y cada proveedor maneja su SDK oficial.
 
@@ -47,26 +47,26 @@ Responsabilidades:
 - Renderizar streaming con `process.stdout.write(chunk)`.
 - Capturar `Ctrl+C` y abortar la request de red.
 
-### 4) Launcher legado (`scripts/run-claudex-linux.sh`)
+### 4) Launcher legado (`scripts/run-axolot-linux.sh`)
 
 Responsabilidades:
 
 - Resolver ejecutables (`bun`, `openclaw`) desde PATH.
 - Leer configuracion local de OpenClaw desde `~/.openclaw/openclaw.json` para evitar llamadas lentas al CLI en el arranque.
 - Exponer comandos rapidos:
-  - `claudex --login <proveedor>` para OAuth/login del proveedor.
-  - `claudex --key <proveedor>` para guardar API key local.
-  - `claudex --use <proveedor> <modelo>` para cambiar modelo y arrancar.
-  - `claudex --model <provider/model>` para setear un ref completo.
+  - `axolot --login <proveedor>` para OAuth/login del proveedor.
+  - `axolot --key <proveedor>` para guardar API key local.
+  - `axolot --use <proveedor> <modelo>` para cambiar modelo y arrancar.
+  - `axolot --model <provider/model>` para setear un ref completo.
 - Levantar OpenClaw gateway si no esta activo.
-- Cerrar proxies previos de Claudex del mismo repo.
+- Cerrar proxies previos de Axolot del mismo repo.
 - Levantar proxy Bun (`src/tools/openclaw-proxy.ts`).
 - Exportar variables de compatibilidad Anthropic para la TUI.
 - Lanzar la TUI con permisos y workspace actual.
 
 ### 5) Gestor de proveedores legado
 
-OpenClaw funciona como estrategia/fabrica de proveedores en el modo legado. Claudex solo maneja refs normalizadas:
+OpenClaw funciona como estrategia/fabrica de proveedores en el modo legado. Axolot solo maneja refs normalizadas:
 
 - `openai/gpt-5.5`
 - `openai-codex/gpt-5.5`
@@ -75,7 +75,7 @@ OpenClaw funciona como estrategia/fabrica de proveedores en el modo legado. Clau
 - `openrouter/tencent/hy3-preview:free`
 - `ollama/qwen2.5-coder:7b`
 
-La autenticacion se guarda fuera del repo, en el estado local de OpenClaw (`~/.openclaw/...`). Asi se puede cambiar de IA sin reconfigurar Claudex desde cero.
+La autenticacion se guarda fuera del repo, en el estado local de OpenClaw (`~/.openclaw/...`). Asi se puede cambiar de IA sin reconfigurar Axolot desde cero.
 
 ### 6) TUI (`/model`)
 
@@ -117,7 +117,7 @@ Responsabilidades:
 
 ### Legado
 
-1. Usuario ejecuta `claudex`.
+1. Usuario ejecuta `axolot`.
 2. El launcher inicia gateway/proxy.
 3. TUI envia request a `ANTHROPIC_API_URL` (proxy local).
 4. Proxy adapta payload y consulta OpenClaw.
@@ -133,7 +133,7 @@ Responsabilidades:
 
 - Priorizar streaming nativo directo para bajar time-to-first-token.
 - Mantener contrato Anthropic en frontend solo mientras se migra la TUI completa.
-- Aislar configuracion en `.claude_tmp` para no contaminar configuracion global.
+- Aislar configuracion en `.axolot_tmp` para no contaminar configuracion global.
 - Mantener API keys fuera del repo mediante `conf` o variables de entorno.
 - Evitar llamadas lentas al CLI de OpenClaw durante arranque normal.
 - No cargar catalogos grandes de modelos hasta que el usuario lo pida.
@@ -141,7 +141,7 @@ Responsabilidades:
 
 ## Contexto del proyecto
 
-Claude Code brilla porque puede leer archivos locales y usar herramientas contra el workspace. Para multiples proveedores conviene conservar esa ventaja con herramientas y lectura selectiva, no pegando todo el directorio al prompt.
+Axolot brilla porque puede leer archivos locales y usar herramientas contra el workspace. Para multiples proveedores conviene conservar esa ventaja con herramientas y lectura selectiva, no pegando todo el directorio al prompt.
 
 No recomendado:
 
@@ -160,7 +160,7 @@ Recomendado:
 ## Riesgos actuales
 
 - Proxy tiene varias rutas fallback; conviene testear solo rutas soportadas por la version de OpenClaw objetivo.
-- Si desactivas `CLAUDEX_UPSTREAM_LOCAL_ONLY`, revisa bien el host upstream antes de usar tokens productivos.
+- Si desactivas `AXOLOT_UPSTREAM_LOCAL_ONLY`, revisa bien el host upstream antes de usar tokens productivos.
 - Algunos proveedores requieren configuracion adicional en OpenClaw antes de que `--login` o `--key` sean suficientes.
 
 ## Mejoras tecnicas recomendadas

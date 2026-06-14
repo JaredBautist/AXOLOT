@@ -105,7 +105,7 @@ const ROWS = [
 const WIDTH = Math.max(...ROWS.map(row => row.length))
 const RENDERED = ROWS.map((row, ri) => spans(row.padEnd(WIDTH, ' '), ri))
 
-export function ClaudexASCIILogo(): React.ReactNode {
+export function AxolotASCIILogo(): React.ReactNode {
   return (
     <Box flexDirection="column" flexShrink={0}>
       {RENDERED.map((row, ri) => (

@@ -1,19 +1,19 @@
-# Claudex
+# Axolot
 
-[![npm](https://img.shields.io/npm/v/claudex-ai.svg?style=flat-square)](https://www.npmjs.com/package/claudex-ai)
+[![npm](https://img.shields.io/npm/v/axolot-ai.svg?style=flat-square)](https://www.npmjs.com/package/axolot-ai)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE.txt)
 [![Node](https://img.shields.io/badge/Node.js-20%2B-brightgreen?style=flat-square)]()
 [![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)]()
 
-**Claudex** is a terminal AI coding assistant that runs directly in your terminal — no gateways, no proxies, no external servers. Just you, your terminal, and your choice of AI provider.
+**Axolot** is a terminal AI coding assistant that runs directly in your terminal — no gateways, no proxies, no external servers. Just you, your terminal, and your choice of AI provider.
 
-<img src="./image.png" width="100%" alt="Claudex terminal UI" />
+<img src="./image.png" width="100%" alt="Axolot terminal UI" />
 
 ## Quick Start
 
 ```bash
-npm install -g claudex-ai
-claudex
+npm install -g axolot-ai
+axolot
 ```
 
 Then press `/model` to pick your provider and authenticate.
@@ -22,22 +22,22 @@ Then press `/model` to pick your provider and authenticate.
 
 ```bash
 # Linux/Mac (curl)
-curl -fsSL https://raw.githubusercontent.com/JaredBautist/CLAUDEX/main/scripts/install.sh | bash
-claudex
+curl -fsSL https://raw.githubusercontent.com/JaredBautist/AXOLOT/main/scripts/install.sh | bash
+axolot
 
 # GitHub direct
-npm install -g github:JaredBautist/CLAUDEX
-claudex
+npm install -g github:JaredBautist/AXOLOT
+axolot
 ```
 
 ## Features
 
-**Multi-Provider** — Claude, OpenAI, and Gemini. Switch anytime with `/model`.
+**Multi-Provider** — Anthropic, OpenAI, Gemini, DeepSeek, and MiniMax. Switch anytime with `/model`.
 
 ```bash
-claudex use claude claude-sonnet-4-6
-claudex use openai gpt-4o
-claudex use gemini gemini-2.5-pro
+axolot use anthropic sonnet
+axolot use openai gpt-4o
+axolot use gemini gemini-2.5-pro
 ```
 
 **30+ Built-in Skills** — Invoke with `/<skill-name>`. The model auto-selects them based on your task.
@@ -51,15 +51,15 @@ claudex use gemini gemini-2.5-pro
 | Productivity | `debug`, `onboard`, `instructions`, `session`, `batch`, `stuck`, `remember`, `learn`, `token-saver` |
 | AI & Providers | `ai-provider`, `skillify`, `keybindings`, `update-config` |
 
-**Spec-Driven Development** — Define requirements, design, and tasks in `.claudex/SPEC.md`. The model reads and updates them as you work.
+**Spec-Driven Development** — Define requirements, design, and tasks in `.axolot/SPEC.md`. The model reads and updates them as you work.
 
 **Web Search & Fetch** — Built-in web search and URL fetching. The model uses them automatically when it needs current information.
 
 **Session Persistence** — Save and restore session state across terminal sessions with `/session save` and `/session resume`.
 
-**Custom Instructions** — Add project-specific rules in `.claudex/instructions/`. They load every turn automatically.
+**Custom Instructions** — Add project-specific rules in `.axolot/instructions/`. They load every turn automatically.
 
-**Adaptive Learning** — Claudex learns your preferences over time. Use `/learn` to manage memory, skill preferences, and suggestions.
+**Adaptive Learning** — Axolot learns your preferences over time. Use `/learn` to manage memory, skill preferences, and suggestions.
 
 **Token Optimization** — `/token-saver` with 4 modes (`auto`, `eco`, `turbo`, `budget`) to control token consumption. Per-message usage display shows `in:X out:Y` for every response.
 
@@ -68,11 +68,11 @@ claudex use gemini gemini-2.5-pro
 ### CLI Commands
 
 ```bash
-claudex                    # Open the TUI
-claudex chat "prompt"      # One-shot query, no TUI
-claudex auth <provider>    # Configure API key
-claudex use <provider> <model>  # Switch model
-claudex -p openai -m gpt-4o-mini chat "hi"  # Override
+axolot                    # Open the TUI
+axolot chat "prompt"      # One-shot query, no TUI
+axolot auth <provider>    # Configure API key
+axolot use <provider> <model>  # Switch model
+axolot -p openai -m gpt-4o-mini chat "hi"  # Override
 ```
 
 ### Inside the TUI
@@ -86,7 +86,7 @@ claudex -p openai -m gpt-4o-mini chat "hi"  # Override
 /test                     # Write & run tests
 /refactor                 # Safe refactoring
 /commit                   # Conventional commit
-/self-test                # Run Claudex's own checks
+/self-test                # Run Axolot's own checks
 /session save             # Save state
 /learn                    # Manage learning & preferences
 /token-saver eco          # Optimize token usage
@@ -103,8 +103,8 @@ claudex -p openai -m gpt-4o-mini chat "hi"  # Override
 Config is stored outside the repo:
 
 ```text
-~/.config/claudex/direct-providers.json
-~/.config/claudex/claude-runtime/
+~/.config/axolot/direct-providers.json
+~/.config/axolot/axolot-runtime/
 ```
 
 Or use environment variables:
@@ -119,33 +119,33 @@ export GEMINI_API_KEY="..."
 
 | Provider | Models | Auth |
 |----------|--------|------|
-| Anthropic Claude | Claude 4, Claude Sonnet 4, Claude Haiku 4 | API key / OAuth |
+| Anthropic | Sonnet, Opus, Haiku | API key / OAuth |
 | OpenAI | GPT-4o, GPT-4o-mini, GPT-5.x | API key / OAuth |
 | Google Gemini | Gemini 2.5 Pro, Gemini 2.5 Flash | API key |
 
 ## Development
 
 ```bash
-git clone https://github.com/JaredBautist/CLAUDEX.git
-cd CLAUDEX
+git clone https://github.com/JaredBautist/AXOLOT.git
+cd AXOLOT
 npm install
 npm start
 ```
 
 ## How It Differs
 
-Claudex is a **direct-provider** TUI. Unlike tools that require a proxy server or gateway:
+Axolot is a **direct-provider** TUI. Unlike tools that require a proxy server or gateway:
 - Your API calls go directly to the provider — nothing in between
 - You own your keys and your data
 - No external dependencies beyond Node.js and npm
 
-The skills system is inspired by Claude Code but extended with Spec-Driven Development, session persistence, structured project memory via `.claudex/`, adaptive learning, and per-message token tracking.
+The skills system is built for Axolot with Spec-Driven Development, session persistence, structured project memory via `.axolot/`, adaptive learning, and per-message token tracking.
 
 ## Project Structure
 
 ```
-.claude/skills/             # Official Claude Code skills (auto-discovered)
-.claudex/                   # Project specs, instructions, session state
+.claude/skills/             # Compatible skill format (auto-discovered)
+.axolot/                   # Project specs, instructions, session state
   SPEC.md                   #   Requirements, design, tasks
   instructions/             #   Custom project rules
   session.json              #   Current session state
@@ -161,4 +161,4 @@ MIT
 
 ## Acknowledgments
 
-Built on ideas from Claude Code, Claude Dev, and the open-source AI tooling ecosystem.
+Built on ideas from the open-source AI tooling ecosystem.

@@ -2,12 +2,12 @@ import { registerBundledSkill } from '../bundledSkills.js'
 
 const INSTRUCTIONS_SKILL_PROMPT = `# Instructions Skill — Personalized Project Rules
 
-Manages custom instructions in \`.claudex/instructions/\`. These files are automatically loaded each turn and injected into the system prompt.
+Manages custom instructions in \`.axolot/instructions/\`. These files are automatically loaded each turn and injected into the system prompt.
 
 ## Commands
 
 ### \`/instructions init\`
-Create \`.claudex/instructions/\` directory with a sample file.
+Create \`.axolot/instructions/\` directory with a sample file.
 
 ### \`/instructions add <name> <content>\`
 Create a new instruction file. Examples:
@@ -24,9 +24,9 @@ Remove an instruction file.
 Replace the content of an existing instruction file.
 
 ## Format
-Each file in \`.claudex/instructions/\` is a markdown file. The filename becomes the section header.
+Each file in \`.axolot/instructions/\` is a markdown file. The filename becomes the section header.
 \`\`\`
-.claudex/instructions/
+.axolot/instructions/
   coding-style.md       # "## Coding Style\\nUse functional components..."
   api-conventions.md    # "## API Conventions\\nAll endpoints use..."
   testing-rules.md      # "## Testing\\nMinimum 80% coverage..."
@@ -42,7 +42,7 @@ export function registerInstructionsSkill(): void {
   registerBundledSkill({
     name: 'instructions',
     description:
-      'Manage personalized project rules in .claudex/instructions/. Files are auto-loaded each turn.',
+      'Manage personalized project rules in .axolot/instructions/. Files are auto-loaded each turn.',
     whenToUse:
       'Use when the user wants to set project-specific rules, coding conventions, branching strategy, or any persistent instructions. Use when the user asks about project setup or conventions.',
     aliases: ['project-rules', 'custom-instructions', 'conventions'],

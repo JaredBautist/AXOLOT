@@ -22,7 +22,7 @@ import {
 const program = new Command()
 
 program
-  .name('claudex')
+  .name('axolot')
   .description('Fast direct multi-provider AI CLI')
   .version('0.1.5')
   .argument('[prompt...]', 'prompt text')
@@ -42,13 +42,13 @@ program
   .command('auth')
   .alias('login')
   .description('Configure a provider API key interactively')
-  .argument('[provider]', 'claude | openai | gemini')
+  .argument('[provider]', 'anthropic | openai | gemini | deepseek | minimax')
   .action(async providerArg => {
     const rl = readline.createInterface({ input, output })
     try {
       const provider =
         providerArg ||
-        (await rl.question('Provider (claude/openai/gemini): ')).trim()
+        (await rl.question('Provider (anthropic/openai/gemini/deepseek/minimax): ')).trim()
       const apiKey = (await rl.question('API key: ')).trim()
 
       saveApiKey(provider, apiKey)
@@ -63,7 +63,7 @@ program
 program
   .command('key')
   .description('Save an API key locally')
-  .argument('<provider>', 'claude | openai | gemini')
+  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax')
   .argument('<apiKey>', 'provider API key')
   .action((provider, apiKey) => {
     saveApiKey(provider, apiKey)
@@ -74,7 +74,7 @@ program
 program
   .command('use')
   .description('Set active provider and optional default model')
-  .argument('<provider>', 'claude | openai | gemini')
+  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax')
   .argument('[model]', 'default model for this provider')
   .action((provider, model) => {
     setActiveProvider(provider)
@@ -125,7 +125,7 @@ async function runChat(promptParts, options) {
   if (!apiKey) {
     console.error(
       `No API key configured for ${providerName}. Run:\n` +
-        `  claudex auth ${providerName}\n` +
+        `  axolot auth ${providerName}\n` +
         `or set the matching env var.`,
     )
     process.exitCode = 1
@@ -134,7 +134,7 @@ async function runChat(promptParts, options) {
 
   const prompt = await resolvePrompt(promptParts)
   if (!prompt) {
-    console.error('Prompt empty. Example: claudex chat "hello"')
+    console.error('Prompt empty. Example: axolot chat "hello"')
     process.exitCode = 1
     return
   }
@@ -193,10 +193,10 @@ async function launchTui() {
   const repoRoot = resolve(dirname(thisFile), '..', '..')
   const launchDir = process.cwd()
   const skillsPackDir = resolve(repoRoot, 'skillpacks', 'token-lean')
-  const claudeConfigDir = getRuntimeConfigDir()
-  const settingsPath = resolve(claudeConfigDir, 'settings.json')
+  const runtimeConfigDir = getRuntimeConfigDir()
+  const settingsPath = resolve(runtimeConfigDir, 'settings.json')
 
-  mkdirSync(claudeConfigDir, { recursive: true })
+  mkdirSync(runtimeConfigDir, { recursive: true })
   if (!existsSync(settingsPath)) {
     writeFileSync(settingsPath, '{}\n')
   }
@@ -207,15 +207,15 @@ async function launchTui() {
     CLAUDE_CODE_ASSUME_TTY: '1',
     CLAUDE_CODE_SKIP_BOOTSTRAP: '0',
     CLAUDE_CODE_OFFLINE_MODE: '0',
-    CLAUDE_CONFIG_DIR: claudeConfigDir,
+    CLAUDE_CONFIG_DIR: runtimeConfigDir,
     CLAUDE_CODE_TRUSTED_ROOT: launchDir,
   }
 
   if (shouldSelectProvider) {
-    env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY || 'claudex-native-provider'
-    env.CLAUDEX_NATIVE_MODE = '1'
-    env.CLAUDEX_NATIVE_PROVIDER = ''
-    env.CLAUDEX_NEEDS_PROVIDER_SETUP = '1'
+    env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY || 'axolot-native-provider'
+    env.AXOLOT_NATIVE_MODE = '1'
+    env.AXOLOT_NATIVE_PROVIDER = ''
+    env.AXOLOT_NEEDS_PROVIDER_SETUP = '1'
     env.ANTHROPIC_MODEL = 'openclaw'
   } else if (providerName === 'claude') {
     if (getCredentialType(providerName) === 'oauth') {
@@ -227,9 +227,9 @@ async function launchTui() {
       env.ANTHROPIC_MODEL = model
     }
   } else {
-    env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY || 'claudex-native-provider'
-    env.CLAUDEX_NATIVE_PROVIDER = providerName
-    env.CLAUDEX_NATIVE_MODE = '1'
+    env.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY || 'axolot-native-provider'
+    env.AXOLOT_NATIVE_PROVIDER = providerName
+    env.AXOLOT_NATIVE_MODE = '1'
     env.ANTHROPIC_MODEL = modelRefForProvider(providerName, model)
     if (providerName === 'openai') {
       env.OPENAI_API_KEY = apiKey
@@ -244,7 +244,7 @@ async function launchTui() {
 
   delete env.ANTHROPIC_API_URL
   delete env.ANTHROPIC_BASE_URL
-  delete env.CLAUDEX_OPENCLAW_MODE
+  delete env.AXOLOT_OPENCLAW_MODE
   delete env.UPSTREAM_URL
   delete env.UPSTREAM_MODEL
   delete env.UPSTREAM_PROVIDER
@@ -300,7 +300,7 @@ function resolveBundledBun(repoRoot) {
 function getRuntimeConfigDir() {
   const configRoot =
     process.env.XDG_CONFIG_HOME || resolve(homedir(), '.config')
-  return resolve(configRoot, 'claudex', 'claude-runtime')
+  return resolve(configRoot, 'axolot', 'axolot-runtime')
 }
 
 async function promptForApiKey(provider) {

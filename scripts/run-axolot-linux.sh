@@ -6,39 +6,39 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 LAUNCH_DIR="$(pwd)"
 
 command -v bun >/dev/null 2>&1 || {
-  echo "[claudex] No se encontro 'bun' en PATH." >&2
+  echo "[axolot] No se encontro 'bun' en PATH." >&2
   exit 1
 }
 
 command -v openclaw >/dev/null 2>&1 || {
-  echo "[claudex] No se encontro 'openclaw' en PATH." >&2
+  echo "[axolot] No se encontro 'openclaw' en PATH." >&2
   exit 1
 }
 
 usage() {
   cat <<'EOF'
 Uso:
-  claudex                         Inicia Claudex usando la config actual de OpenClaw
-  claudex --models                Lista modelos disponibles en OpenClaw
-  claudex --model <modelo>        Cambia el modelo default de OpenClaw e inicia Claudex
-  claudex --use <proveedor> <modelo>
-                                  Usa un proveedor/modelo y arranca Claudex
-  claudex --login [proveedor]     Inicia sesion/OAuth para un proveedor
-  claudex --key <proveedor>       Pega y guarda API key para un proveedor
-  claudex --auth                  Abre el asistente de autenticacion de modelos
-  claudex --setup                 Abre el onboarding completo de OpenClaw
-  claudex --status                Muestra estado de OpenClaw
-  claudex --doctor                Ejecuta diagnostico de OpenClaw
+  axolot                         Inicia Axolot usando la config actual de OpenClaw
+  axolot --models                Lista modelos disponibles en OpenClaw
+  axolot --model <modelo>        Cambia el modelo default de OpenClaw e inicia Axolot
+  axolot --use <proveedor> <modelo>
+                                  Usa un proveedor/modelo y arranca Axolot
+  axolot --login [proveedor]     Inicia sesion/OAuth para un proveedor
+  axolot --key <proveedor>       Pega y guarda API key para un proveedor
+  axolot --auth                  Abre el asistente de autenticacion de modelos
+  axolot --setup                 Abre el onboarding completo de OpenClaw
+  axolot --status                Muestra estado de OpenClaw
+  axolot --doctor                Ejecuta diagnostico de OpenClaw
 
 Ejemplos:
-  claudex --model openai/gpt-5.5
-  claudex --use openai gpt-5.5
-  claudex --use anthropic claude-sonnet-4-5
-  claudex --use google gemini-2.5-pro
-  claudex --login openai-codex
-  claudex --key openrouter
-  claudex --model openai-codex/gpt-5.5
-  claudex --model ollama/qwen2.5-coder:7b
+  axolot --model openai/gpt-5.5
+  axolot --use openai gpt-5.5
+  axolot --use anthropic claude-sonnet-4-5
+  axolot --use google gemini-2.5-pro
+  axolot --login openai-codex
+  axolot --key openrouter
+  axolot --model openai-codex/gpt-5.5
+  axolot --model ollama/qwen2.5-coder:7b
 EOF
 }
 
@@ -106,7 +106,7 @@ openclaw_primary_model() {
   fi
 }
 
-CLAUDEX_ARGS=()
+AXOLOT_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h)
@@ -134,7 +134,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --key)
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
-        echo "[claudex] Falta el proveedor. Ejemplo: claudex --key openrouter" >&2
+        echo "[axolot] Falta el proveedor. Ejemplo: axolot --key openrouter" >&2
         exit 1
       fi
       exec openclaw models auth paste-api-key --provider "$(normalize_api_key_provider "$2")"
@@ -142,7 +142,7 @@ while [[ $# -gt 0 ]]; do
     --key=*)
       KEY_PROVIDER="${1#--key=}"
       if [[ -z "$KEY_PROVIDER" ]]; then
-        echo "[claudex] Falta el proveedor. Ejemplo: claudex --key=openrouter" >&2
+        echo "[axolot] Falta el proveedor. Ejemplo: axolot --key=openrouter" >&2
         exit 1
       fi
       exec openclaw models auth paste-api-key --provider "$(normalize_api_key_provider "$KEY_PROVIDER")"
@@ -158,10 +158,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --model)
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
-        echo "[claudex] Falta el modelo. Ejemplo: claudex --model openai/gpt-5.5" >&2
+        echo "[axolot] Falta el modelo. Ejemplo: axolot --model openai/gpt-5.5" >&2
         exit 1
       fi
-      echo "[claudex] Configurando modelo OpenClaw: $2"
+      echo "[axolot] Configurando modelo OpenClaw: $2"
       openclaw models set "$2"
       export UPSTREAM_MODEL="$2"
       shift 2
@@ -169,27 +169,27 @@ while [[ $# -gt 0 ]]; do
     --model=*)
       MODEL_VALUE="${1#--model=}"
       if [[ -z "$MODEL_VALUE" ]]; then
-        echo "[claudex] Falta el modelo. Ejemplo: claudex --model=openai/gpt-5.5" >&2
+        echo "[axolot] Falta el modelo. Ejemplo: axolot --model=openai/gpt-5.5" >&2
         exit 1
       fi
-      echo "[claudex] Configurando modelo OpenClaw: $MODEL_VALUE"
+      echo "[axolot] Configurando modelo OpenClaw: $MODEL_VALUE"
       openclaw models set "$MODEL_VALUE"
       export UPSTREAM_MODEL="$MODEL_VALUE"
       shift
       ;;
     --use)
       if [[ $# -lt 3 || -z "${2:-}" || -z "${3:-}" ]]; then
-        echo "[claudex] Falta proveedor/modelo. Ejemplo: claudex --use openai gpt-5.5" >&2
+        echo "[axolot] Falta proveedor/modelo. Ejemplo: axolot --use openai gpt-5.5" >&2
         exit 1
       fi
       MODEL_VALUE="$(model_ref_for_provider "$2" "$3")"
-      echo "[claudex] Configurando proveedor/modelo OpenClaw: $MODEL_VALUE"
+      echo "[axolot] Configurando proveedor/modelo OpenClaw: $MODEL_VALUE"
       openclaw models set "$MODEL_VALUE"
       export UPSTREAM_MODEL="$MODEL_VALUE"
       shift 3
       ;;
     *)
-      CLAUDEX_ARGS+=("$1")
+      AXOLOT_ARGS+=("$1")
       shift
       ;;
   esac
@@ -217,7 +217,7 @@ extract_gateway_port() {
   bun -e 'const raw = process.argv[1]; try { const u = new URL(raw); const local = new Set(["127.0.0.1", "localhost", "::1"]); if (local.has(u.hostname)) console.log(u.port || (u.protocol === "https:" ? "443" : "80")); } catch {}' "$url"
 }
 
-mkdir -p "$REPO_ROOT/.claude_tmp/run" "$REPO_ROOT/.claude_tmp/logs"
+mkdir -p "$REPO_ROOT/.axolot_tmp/run" "$REPO_ROOT/.axolot_tmp/logs"
 
 OPENCLAW_GATEWAY_PORT="$(openclaw_config_get 'gateway.port')"
 if [[ ! "$OPENCLAW_GATEWAY_PORT" =~ ^[0-9]+$ ]]; then
@@ -226,7 +226,7 @@ fi
 
 OPENCLAW_MODEL="$(openclaw_primary_model)"
 if [[ -z "$OPENCLAW_MODEL" ]]; then
-  echo "[claudex] OpenClaw no tiene modelo configurado. Ejecutando setup interactivo..."
+  echo "[axolot] OpenClaw no tiene modelo configurado. Ejecutando setup interactivo..."
   exec openclaw onboard --wizard
 fi
 
@@ -235,15 +235,15 @@ export UPSTREAM_MODEL="${UPSTREAM_MODEL:-$OPENCLAW_MODEL}"
 export UPSTREAM_PROVIDER="${UPSTREAM_PROVIDER:-}"
 export UPSTREAM_AUTH="${UPSTREAM_AUTH:-$(read_openclaw_token)}"
 export UPSTREAM_AUTH_HEADER="${UPSTREAM_AUTH_HEADER:-authorization}"
-export CLAUDEX_UPSTREAM_LOCAL_ONLY="${CLAUDEX_UPSTREAM_LOCAL_ONLY:-1}"
-export CLAUDEX_OLLAMA_DIRECT="${CLAUDEX_OLLAMA_DIRECT:-1}"
-export CLAUDEX_OPENCLAW_MODE=1
+export AXOLOT_UPSTREAM_LOCAL_ONLY="${AXOLOT_UPSTREAM_LOCAL_ONLY:-1}"
+export AXOLOT_OLLAMA_DIRECT="${AXOLOT_OLLAMA_DIRECT:-1}"
+export AXOLOT_OPENCLAW_MODE=1
 export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
-export CLAUDEX_SKILLS_PACK="${CLAUDEX_SKILLS_PACK:-token-lean}"
-export CLAUDE_CONFIG_DIR="$REPO_ROOT/.claude_tmp"
-export CLAUDEX_PROXY_LOG="$REPO_ROOT/.claude_tmp/logs/proxy-output.log"
+export AXOLOT_SKILLS_PACK="${AXOLOT_SKILLS_PACK:-token-lean}"
+export CLAUDE_CONFIG_DIR="$REPO_ROOT/.axolot_tmp"
+export AXOLOT_PROXY_LOG="$REPO_ROOT/.axolot_tmp/logs/proxy-output.log"
 
-SKILLS_PACK_DIR="$REPO_ROOT/skillpacks/$CLAUDEX_SKILLS_PACK"
+SKILLS_PACK_DIR="$REPO_ROOT/skillpacks/$AXOLOT_SKILLS_PACK"
 if [[ ! -d "$SKILLS_PACK_DIR/.claude/skills" ]]; then
   SKILLS_PACK_DIR="$REPO_ROOT/skillpacks/token-lean"
 fi
@@ -278,16 +278,16 @@ kill_repo_proxies() {
 GATEWAY_PORT="$(extract_gateway_port "$UPSTREAM_URL")"
 if [[ -n "$GATEWAY_PORT" ]]; then
   if ! is_port_listening "$GATEWAY_PORT"; then
-    echo "[claudex] Iniciando OpenClaw gateway en 127.0.0.1:$GATEWAY_PORT"
-    (cd "$REPO_ROOT" && openclaw gateway run --port "$GATEWAY_PORT" --ws-log compact >"$REPO_ROOT/.claude_tmp/logs/openclaw-gateway.log" 2>&1 & echo $! >"$REPO_ROOT/.claude_tmp/run/gateway.pid")
+    echo "[axolot] Iniciando OpenClaw gateway en 127.0.0.1:$GATEWAY_PORT"
+    (cd "$REPO_ROOT" && openclaw gateway run --port "$GATEWAY_PORT" --ws-log compact >"$REPO_ROOT/.axolot_tmp/logs/openclaw-gateway.log" 2>&1 & echo $! >"$REPO_ROOT/.axolot_tmp/run/gateway.pid")
     wait_for_port "$GATEWAY_PORT" 30 || true
   else
-    echo "[claudex] OpenClaw gateway ya escucha en puerto $GATEWAY_PORT"
+    echo "[axolot] OpenClaw gateway ya escucha en puerto $GATEWAY_PORT"
   fi
 fi
 
-if [[ -f "$REPO_ROOT/.claude_tmp/run/proxy.pid" ]]; then
-  OLD_PROXY_PID="$(cat "$REPO_ROOT/.claude_tmp/run/proxy.pid" 2>/dev/null || true)"
+if [[ -f "$REPO_ROOT/.axolot_tmp/run/proxy.pid" ]]; then
+  OLD_PROXY_PID="$(cat "$REPO_ROOT/.axolot_tmp/run/proxy.pid" 2>/dev/null || true)"
   if [[ "$OLD_PROXY_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PROXY_PID" 2>/dev/null; then
     kill "$OLD_PROXY_PID" 2>/dev/null || true
   fi
@@ -299,8 +299,8 @@ if is_port_listening "$PROXY_PORT"; then
   export PROXY_PORT="$(find_free_port)"
 fi
 
-echo "[claudex] Iniciando proxy en 127.0.0.1:$PROXY_PORT"
-(cd "$REPO_ROOT" && bun run src/tools/openclaw-proxy.ts >"$REPO_ROOT/.claude_tmp/logs/proxy.log" 2>&1 & echo $! >"$REPO_ROOT/.claude_tmp/run/proxy.pid")
+echo "[axolot] Iniciando proxy en 127.0.0.1:$PROXY_PORT"
+(cd "$REPO_ROOT" && bun run src/tools/openclaw-proxy.ts >"$REPO_ROOT/.axolot_tmp/logs/proxy.log" 2>&1 & echo $! >"$REPO_ROOT/.axolot_tmp/run/proxy.pid")
 wait_for_port "$PROXY_PORT" 30 || true
 
 export ANTHROPIC_API_URL="http://127.0.0.1:$PROXY_PORT"
@@ -312,7 +312,7 @@ export CLAUDE_CODE_OFFLINE_MODE=1
 export CLAUDE_CODE_DISABLE_RIPGREP=1
 export CLAUDE_CODE_ASSUME_TTY=1
 
-ARGS=("${CLAUDEX_ARGS[@]}")
+ARGS=("${AXOLOT_ARGS[@]}")
 HAS_BUDGET=0
 for arg in "${ARGS[@]}"; do
   if [[ "$arg" == "--max-budget-usd" || "$arg" == --max-budget-usd=* ]]; then
@@ -322,7 +322,7 @@ for arg in "${ARGS[@]}"; do
 done
 
 if [[ "$HAS_BUDGET" == "0" ]]; then
-  ARGS+=(--max-budget-usd "${CLAUDEX_MAX_BUDGET_USD:-2}")
+  ARGS+=(--max-budget-usd "${AXOLOT_MAX_BUDGET_USD:-2}")
 fi
 
 cd "$REPO_ROOT"
@@ -334,5 +334,5 @@ exec bun run src/dev-entry.ts \
   --add-dir "$REPO_ROOT" \
   --add-dir "$REPO_ROOT/src" \
   --add-dir "$SKILLS_PACK_DIR" \
-  --settings "$REPO_ROOT/.claude_tmp/settings.json" \
+  --settings "$REPO_ROOT/.axolot_tmp/settings.json" \
   "${ARGS[@]}"

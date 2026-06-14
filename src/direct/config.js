@@ -1,6 +1,7 @@
 import Conf from 'conf'
 
 export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax'])
+const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deepseek', 'minimax'])
 
 const DEFAULT_MODELS = Object.freeze({
   claude: 'claude-3-5-sonnet-latest',
@@ -11,7 +12,7 @@ const DEFAULT_MODELS = Object.freeze({
 })
 
 const store = new Conf({
-  projectName: 'claudex',
+  projectName: 'axolot',
   configName: 'direct-providers',
   defaults: {
     models: DEFAULT_MODELS,
@@ -31,7 +32,7 @@ export function normalizeProvider(provider) {
   if (value === 'minimax') return 'minimax'
 
   throw new Error(
-    `Proveedor no soportado: ${provider}. Usa: ${PROVIDERS.join(', ')}`,
+    `Proveedor no soportado: ${provider}. Usa: ${DISPLAY_PROVIDERS.join(', ')}`,
   )
 }
 
