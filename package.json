@@ -1,6 +1,6 @@
 {
   "name": "axolot-ai",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": false,
   "license": "UNLICENSED",
   "type": "module",
@@ -19,6 +19,7 @@
     "skillpacks",
     "scripts/install.sh",
     "README.md",
+    "image.png",
     "LICENSE",
     "tsconfig.json",
     "tsconfig.axolot.json",
