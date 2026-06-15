@@ -399,9 +399,9 @@ async function* streamOpenAIResponses(
   }
 
   const toolCalls = [...toolCallChunks.values()]
-    .filter(call => call.name && call.id)
+    .filter(call => call.name)
     .map(call => ({
-      id: call.id,
+      id: randomUUID(),
       name: call.name,
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
@@ -622,7 +622,7 @@ async function* streamMiniMax(
   const toolCalls = [...toolCallChunks.values()]
     .filter(call => call.name)
     .map(call => ({
-      id: call.id || randomUUID(),
+      id: randomUUID(),
       name: call.name,
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
