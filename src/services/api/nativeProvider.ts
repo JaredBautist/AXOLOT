@@ -569,7 +569,7 @@ async function* streamMiniMax(
     model,
     messages: [
       { role: 'system', content: nativeSystemPrompt(systemPrompt, 'minimax') },
-      ...messagesToOpenAIChat(messages),
+      ...messagesToMiniMaxChat(messages),
     ],
     max_tokens: 16384,
     ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
@@ -727,6 +727,33 @@ function messagesToOpenAIChat(messages: Message[]): Array<Record<string, unknown
     const text = contentToText(content)
     if (!text) return []
     return [{ role: 'user', content: text }]
+  })
+}
+
+/**
+ * Convert messages to OpenAI-compatible chat format for MiniMax, ensuring
+ * tool results always have matching tool calls. MiniMax M3 is strict about
+ * this and rejects orphaned tool results with error 2013.
+ */
+function messagesToMiniMaxChat(messages: Message[]): Array<Record<string, unknown>> {
+  const raw = messagesToOpenAIChat(messages)
+
+  // Collect all tool call IDs from assistant messages
+  const validToolCallIds = new Set<string>()
+  for (const msg of raw) {
+    if (msg.role === 'assistant' && msg.tool_calls) {
+      for (const call of msg.tool_calls as Array<{ id: string }>) {
+        if (call.id) validToolCallIds.add(call.id)
+      }
+    }
+  }
+
+  // Filter out orphaned tool results
+  return raw.filter(msg => {
+    if (msg.role === 'tool' && msg.tool_call_id && !validToolCallIds.has(msg.tool_call_id as string)) {
+      return false
+    }
+    return true
   })
 }
 
@@ -1398,6 +1425,7 @@ async function fetchMiniMaxWithRetry(
 }
 
 async function fetchWithRetry(
+  url: string,
   options: RequestInit & { signal: AbortSignal },
   maxRetries = 2,
 ): Promise<Response> {

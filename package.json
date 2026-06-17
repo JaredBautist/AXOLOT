@@ -5,7 +5,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "axolot": "src/direct/chat.js"
+    "axolot": "bin/axolot"
   },
   "engines": {
     "node": ">=20",

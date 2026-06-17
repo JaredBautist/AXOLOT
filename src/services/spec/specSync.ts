@@ -2,7 +2,7 @@ import { readFileSync, existsSync, mkdirSync, appendFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { registerPostSamplingHook, type REPLHookContext } from '../../utils/hooks/postSamplingHooks.js'
 import { logForDebugging } from '../../utils/debug.js'
-import { getCwd } from '../../utils/state.js'
+import { getCwd } from '../../utils/cwd.js'
 
 export interface SpecTask {
   id: string
