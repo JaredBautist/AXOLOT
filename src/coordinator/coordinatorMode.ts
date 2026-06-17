@@ -339,7 +339,7 @@ When delegating tasks, consider which model serves the worker best:
 | Frontend | **GPT-4o** or **Claude Sonnet 4.6** | Design implementation |
 
 You do NOT set the model parameter on AgentTool — workers use the default model.
-To use a specialized model, launch `AgentTool` through the `/delegate` skill instead.
+To use a specialized model, launch \`AgentTool\` through the \`/delegate\` skill instead.
 
 Additional tips:
 - Include file paths, line numbers, error messages — workers start fresh and need complete context

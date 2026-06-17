@@ -575,7 +575,7 @@ async function* streamMiniMax(
     ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
   }
 
-  const response = await fetchWithRetry('https://api.minimax.io/v1/chat/completions', {
+  const response = await fetchMiniMaxWithRetry('https://api.minimax.io/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -584,6 +584,7 @@ async function* streamMiniMax(
     body: JSON.stringify({ ...requestBody, stream: true }),
     signal,
     keepalive: false,
+    timeout: 30_000,
   })
 
   const reader = response.body?.getReader()
@@ -595,9 +596,21 @@ async function* streamMiniMax(
   let debugged = false
   const toolCallChunks = new Map<string, { id: string; name: string; arguments: string }>()
 
+  // Stream stall watchdog: if no data arrives for 60s, abort
+  let streamTimeout: NodeJS.Timeout | null = null
+  const resetStreamTimeout = () => {
+    if (streamTimeout) clearTimeout(streamTimeout)
+    streamTimeout = setTimeout(() => {
+      streamTimeout = null
+      reader.cancel('MiniMax stream stalled').catch(() => {})
+    }, 60_000)
+  }
+  resetStreamTimeout()
+
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
+    resetStreamTimeout()
 
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
@@ -645,10 +658,13 @@ async function* streamMiniMax(
     }
   }
 
+  // Clean up stream watchdog
+  if (streamTimeout) clearTimeout(streamTimeout)
+
   if (!fullText && !toolCallChunks.size) {
     const nonStreamBody = JSON.stringify(requestBody)
     try {
-      const nsResponse = await fetchWithRetry('https://api.minimax.io/v1/chat/completions', {
+      const nsResponse = await fetchMiniMaxWithRetry('https://api.minimax.io/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -657,6 +673,7 @@ async function* streamMiniMax(
         body: nonStreamBody,
         signal,
         keepalive: false,
+        timeout: 15_000,
       })
       const nsResult = await nsResponse.json()
       const nsText = nsResult?.choices?.[0]?.message?.content
@@ -1329,8 +1346,58 @@ function truncateNativeToolResult(output: string): string {
   return `${truncated}\n\n[Axolot truncated this tool result for speed/token usage (${output.length} chars total, showing first ${limit}). Use Read with offset/limit or a narrower command if more content is needed.]`
 }
 
-async function fetchWithRetry(
+async function fetchMiniMaxWithRetry(
   url: string,
+  options: RequestInit & { signal: AbortSignal; timeout?: number },
+  maxRetries = 3,
+): Promise<Response> {
+  const timeout = options.timeout ?? 30_000
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(new DOMException('MiniMax timeout', 'TimeoutError')), timeout)
+    const combinedSignal = AbortSignal.any?.([options.signal, controller.signal]) ?? options.signal
+
+    try {
+      const response = await fetch(url, { ...options, signal: combinedSignal })
+      clearTimeout(timeoutId)
+
+      if (response.ok) return response
+
+      const text = await response.text().catch(() => '')
+      const isTransient =
+        response.status === 429 ||
+        response.status === 400 ||
+        response.status >= 500
+
+      if (isTransient && attempt < maxRetries) {
+        const delay = Math.min(1500 * 2 ** attempt + Math.random() * 1000, 15_000)
+        await sleep(delay)
+        continue
+      }
+
+      throw new Error(`MiniMax error (${response.status}): ${text.slice(0, 500)}`)
+    } catch (e) {
+      clearTimeout(timeoutId)
+      if (options.signal?.aborted) throw e
+
+      const err = e instanceof Error ? e : new Error(String(e))
+      // Don't retry auth or non-transient errors
+      if (err.message?.includes('MiniMax error (401)') || err.message?.includes('MiniMax error (403)')) throw err
+
+      lastError = err
+      if (attempt < maxRetries) {
+        const delay = Math.min(1500 * 2 ** attempt + Math.random() * 1000, 15_000)
+        await sleep(delay)
+      }
+    }
+  }
+
+  throw lastError || new Error('MiniMax request failed after retries')
+}
+
+async function fetchWithRetry(
   options: RequestInit & { signal: AbortSignal },
   maxRetries = 2,
 ): Promise<Response> {
