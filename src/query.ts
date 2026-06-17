@@ -98,6 +98,13 @@ import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
 import { applyToolResultBudget } from './utils/toolResultStorage.js'
+import { OutputGuard } from './services/validation/outputGuard.js'
+import {
+  createBreakerState,
+  evaluateBreaker,
+  type BreakerState,
+  type ToolAction,
+} from './services/validation/circuitBreaker.js'
 import { recordContentReplacement } from './utils/sessionStorage.js'
 import { handleStopHooks } from './query/stopHooks.js'
 import { buildQueryConfig } from './query/config.js'
@@ -279,6 +286,10 @@ async function* queryLoop(
     transition: undefined,
   }
   const budgetTracker = feature('TOKEN_BUDGET') ? createBudgetTracker() : null
+
+  // Circuit breaker state — tracks tool call patterns to detect loops
+  let outputGuard = new OutputGuard(1)
+  let breakerState = createBreakerState()
 
   // task_budget.remaining tracking across compaction boundaries. Undefined
   // until first compact fires — while context is uncompacted the server can
@@ -1409,6 +1420,8 @@ async function* queryLoop(
       ? streamingToolExecutor.getRemainingResults()
       : runTools(toolUseBlocks, assistantMessages, canUseTool, toolUseContext)
 
+    let breakerTripped = false
+
     for await (const update of toolUpdates) {
       if (update.message) {
         yield update.message
@@ -1431,6 +1444,79 @@ async function* queryLoop(
         updatedToolUseContext = {
           ...update.newContext,
           queryTracking,
+        }
+      }
+
+      // Track tool calls for circuit breaker and output guard
+      if (!breakerTripped && update.message?.type === 'user') {
+        const content = (update.message as any).message?.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block?.type === 'tool_result') {
+              const blockInput = (block as any).input
+              const toolName = (block as any).tool_name || ''
+              const inputRecord: Record<string, unknown> = {}
+              if (blockInput && typeof blockInput === 'object') {
+                Object.assign(inputRecord, blockInput)
+              }
+              outputGuard.recordToolCall(toolName, inputRecord)
+
+              // Build action for circuit breaker
+              let action: ToolAction
+              const nameLower = toolName.toLowerCase()
+              const filePath = (inputRecord.file_path as string) || (inputRecord.filePath as string) || ''
+              if (nameLower === 'read' || nameLower === 'filereadtool') {
+                action = { type: 'read', filePath }
+                outputGuard.recordFileAccess(filePath, 'read')
+              } else if (nameLower === 'write' || nameLower === 'filewritetool') {
+                action = { type: 'write', filePath }
+                outputGuard.recordFileAccess(filePath, 'write')
+              } else if (nameLower === 'edit' || nameLower === 'fileedittool') {
+                action = { type: 'edit', filePath }
+                outputGuard.recordFileAccess(filePath, 'edit')
+              } else {
+                action = { type: 'other', name: toolName, params: inputRecord }
+              }
+
+              const warning = evaluateBreaker(breakerState, action)
+              if (warning) {
+                breakerTripped = true
+                // Inject circuit breaker warning as a meta message
+                const breakerMsg = createUserMessage({
+                  content: warning,
+                  isMeta: true,
+                })
+                yield breakerMsg
+                toolResults.push(
+                  ...normalizeMessagesForAPI(
+                    [breakerMsg],
+                    toolUseContext.options.tools,
+                  ).filter(_ => _.type === 'user'),
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Also check output guard for loops (read-only patterns)
+    if (!breakerTripped) {
+      const loopWarnings = outputGuard.check(false)
+      if (loopWarnings.length > 0) {
+        const reminder = outputGuard.buildReminder(loopWarnings)
+        if (reminder) {
+          const guardMsg = createUserMessage({
+            content: reminder,
+            isMeta: true,
+          })
+          yield guardMsg
+          toolResults.push(
+            ...normalizeMessagesForAPI(
+              [guardMsg],
+              toolUseContext.options.tools,
+            ).filter(_ => _.type === 'user'),
+          )
         }
       }
     }
@@ -1761,6 +1847,12 @@ async function* queryLoop(
  * When the model changes (e.g., ChatGPT -> DeepSeek), the new model gets
  * a system-reminder noting the transition and summarizing recent context.
  * This prevents the user from having to re-explain everything from scratch.
+ *
+ * The summary includes:
+ * - Recent user messages (up to 5, full-length)
+ * - Active files (files the previous model read/wrote/edited)
+ * - Current task state (what's been done, what's pending)
+ * - Key decisions extracted from assistant responses
  */
 function injectModelTransitionContext(
   messages: Message[],
@@ -1787,14 +1879,14 @@ function injectModelTransitionContext(
     return messages
   }
 
-  const contextSummary = buildTransitionSummary(messages, lastAssistantIdx)
+  const contextSummary = buildRichTransitionSummary(messages, lastAssistantIdx)
 
   const bridgeContent = [
     `<system-reminder>`,
     `[Model Change: ${lastModel} \u2192 ${currentModel}]`,
     `The assistant messages above were generated by ${lastModel}. You are now ${currentModel}.`,
     `Continue the work seamlessly based on the full conversation history.`,
-    contextSummary ? `\nRecent context:\n${contextSummary}` : '',
+    contextSummary ? `\n${contextSummary}` : '',
     `You have the same tools and capabilities available. Carry on.`,
     `</system-reminder>`,
   ]
@@ -1808,24 +1900,82 @@ function injectModelTransitionContext(
   ]
 }
 
-function buildTransitionSummary(
+function buildRichTransitionSummary(
   messages: Message[],
   upToIdx: number,
 ): string {
-  const lines: string[] = []
-  let count = 0
-  for (let i = upToIdx - 1; i >= 0 && count < 3; i--) {
+  const sections: string[] = []
+
+  // Section 1: Recent user requests (up to 5, more verbose than before)
+  const userRequests: string[] = []
+  for (let i = upToIdx - 1; i >= 0 && userRequests.length < 5; i--) {
     const msg = messages[i] as any
     if (msg.type === 'user' && !msg.isMeta) {
       const text = quickExtractText(msg.message?.content)
       if (text) {
-        const truncated = text.length > 120 ? text.slice(0, 120) + '\u2026' : text
-        lines.unshift('- ' + truncated)
-        count++
+        const truncated = text.length > 300 ? text.slice(0, 300) + '\u2026' : text
+        userRequests.unshift(truncated)
       }
     }
   }
-  return lines.length > 0 ? lines.join('\n') : ''
+  if (userRequests.length > 0) {
+    sections.push('### Recent User Requests\n' + userRequests.map(r => '- ' + r).join('\n'))
+  }
+
+  // Section 2: Active files (files the model was working on)
+  const readFiles: Set<string> = new Set()
+  const writtenFiles: Set<string> = new Set()
+  for (let i = 0; i <= upToIdx; i++) {
+    const msg = messages[i] as any
+    if (msg.type === 'assistant' && msg.message?.content) {
+      const content = Array.isArray(msg.message.content) ? msg.message.content : []
+      for (const block of content) {
+        if (block.type === 'tool_use' && block.input) {
+          const input = block.input as Record<string, unknown>
+          const filePath = (input.file_path as string) || (input.filePath as string) || ''
+          if (!filePath) continue
+          const name = String(block.name || '').toLowerCase()
+          if (name.includes('read')) {
+            readFiles.add(filePath)
+          } else if (name.includes('write') || name.includes('edit')) {
+            writtenFiles.add(filePath)
+          }
+        }
+      }
+    }
+  }
+  if (readFiles.size > 0 || writtenFiles.size > 0) {
+    const parts: string[] = ['### Active Files']
+    if (writtenFiles.size > 0) {
+      parts.push('**Modified:** ' + [...writtenFiles].join(', '))
+    }
+    if (readFiles.size > 0) {
+      parts.push('**Read:** ' + [...readFiles].join(', '))
+    }
+    sections.push(parts.join('\n'))
+  }
+
+  // Section 3: Recent assistant responses — extract key decisions/outcomes
+  const outcomes: string[] = []
+  for (let i = Math.max(0, upToIdx - 4); i <= upToIdx; i++) {
+    const msg = messages[i] as any
+    if (msg.type === 'assistant' && msg.message?.content) {
+      const text = quickExtractText(msg.message?.content)
+      if (text) {
+        const cleaned = text.trim()
+        if (cleaned.length > 10 && cleaned.length < 500) {
+          outcomes.push(cleaned)
+        }
+      }
+    }
+  }
+  if (outcomes.length > 0) {
+    sections.push('### Previous Model Output\n' + outcomes.map(o => '> ' + o).join('\n\n'))
+  }
+
+  if (sections.length === 0) return ''
+
+  return sections.join('\n\n')
 }
 
 function quickExtractText(content: unknown): string {

@@ -45,6 +45,9 @@ Marks a task as completed (moves from pending/in-progress to done).
 ### \`/spec design <description>\`
 Appends a design decision to the Design section.
 
+### \`/spec validate\`
+Auto-validates SPEC.md against the actual codebase. Reads spec tasks and checks whether pending tasks have corresponding implementation files, whether completed tasks actually exist in code, and flags any drift between spec and reality. Reports a summary of spec health.
+
 ## SPEC.md Format Template
 
 \`\`\`markdown

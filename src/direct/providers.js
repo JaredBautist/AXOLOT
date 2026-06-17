@@ -125,6 +125,7 @@ export class MiniMaxProvider {
       },
       body,
       signal: options.signal,
+      keepalive: false,
     })
 
     if (!response.ok) {
@@ -189,6 +190,7 @@ export class MiniMaxProvider {
         },
         body: nsBody,
         signal: options.signal,
+        keepalive: false,
       })
       if (nsRes.ok) {
         const result = await nsRes.json()

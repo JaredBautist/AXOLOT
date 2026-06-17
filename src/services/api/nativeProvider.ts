@@ -14,6 +14,8 @@ import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
 import { FRONTEND_DESIGN_PROMPT } from '../../skills/bundled/frontendDesign.js'
 import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
+import { getRoutingInstructions } from '../../services/orchestration/taskRouter.js'
+import { selectSmartModel, detectAvailableProviders, profileProject, inferTaskTypes } from '../../services/orchestration/smartDefaults.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
@@ -75,7 +77,41 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: envProvider, model: raw }
   }
 
+  // Smart default: if AXOLOT_AUTO_NATIVE is set and no explicit provider
+  // matched, try to auto-select a native provider based on project context.
+  if (process.env.AXOLOT_AUTO_NATIVE === '1' || process.env.AXOLOT_AUTO_NATIVE === 'true') {
+    return getSmartNativeRoute()
+  }
+
   return null
+}
+
+function getSmartNativeRoute(): NativeRoute | null {
+  const available = detectAvailableProviders()
+  const providers = Object.keys(available)
+  if (providers.length === 0) return null
+
+  const profile = profileProject()
+  const tasks = inferTaskTypes(profile)
+  const budgetMode = process.env.AXOLOT_BUDGET_MODE || 'balanced'
+
+  // Use the first inferred task type to select a model
+  const result = selectSmartModel(tasks[0], {
+    budgetMode: budgetMode as any,
+    apiKeys: available,
+  })
+
+  const providerMap: Record<string, NativeProvider> = {
+    openai: 'openai',
+    deepseek: 'deepseek',
+    gemini: 'gemini',
+    minimax: 'minimax',
+  }
+
+  const nativeProvider = providerMap[result.provider]
+  if (!nativeProvider) return null
+
+  return { provider: nativeProvider, model: result.model.id }
 }
 
 export async function* queryNativeProvider({
@@ -167,10 +203,11 @@ export async function* queryNativeProvider({
     yield createNativeAssistantMessage(model, text, toolCalls)
   } catch (error) {
     if (signal.aborted) return
+    const classified = classifyNativeError(error instanceof Error ? error : new Error(String(error)))
     yield createAssistantAPIErrorMessage({
-      content: `Provider error (${route.provider}): ${formatError(error)}`,
-      apiError: 'api_error',
-      error: 'api_error',
+      content: `Provider error (${route.provider}/${classified}): ${formatError(error)}`,
+      apiError: classified === 'auth_error' ? 'invalid_api_key' : 'api_error',
+      error: classified,
     })
   }
 }
@@ -446,6 +483,15 @@ async function* streamGemini(
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
+function getDeepSeekThinking(): Record<string, unknown> {
+  const mode = (process.env.DEEPSEEK_THINKING || 'high').toLowerCase()
+  if (mode === 'off' || mode === 'false' || mode === 'none') return {}
+  const budget = readPositiveIntEnv('DEEPSEEK_THINKING_BUDGET', 0)
+  const thinking: Record<string, unknown> = { type: mode }
+  if (budget > 0) thinking.budget_tokens = budget
+  return { thinking }
+}
+
 async function* streamDeepSeek(
   model: string,
   messages: Message[],
@@ -474,7 +520,7 @@ async function* streamDeepSeek(
           ...messagesToOpenAIChat(messages),
         ],
         ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-        extra_body: { thinking: 'high' },
+        extra_body: getDeepSeekThinking(),
       },
       { signal },
     ),
@@ -537,6 +583,7 @@ async function* streamMiniMax(
     },
     body: JSON.stringify({ ...requestBody, stream: true }),
     signal,
+    keepalive: false,
   })
 
   const reader = response.body?.getReader()
@@ -600,22 +647,25 @@ async function* streamMiniMax(
 
   if (!fullText && !toolCallChunks.size) {
     const nonStreamBody = JSON.stringify(requestBody)
-    const nsResponse = await fetch('https://api.minimax.io/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: nonStreamBody,
-      signal,
-    })
-    if (nsResponse.ok) {
+    try {
+      const nsResponse = await fetchWithRetry('https://api.minimax.io/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: nonStreamBody,
+        signal,
+        keepalive: false,
+      })
       const nsResult = await nsResponse.json()
       const nsText = nsResult?.choices?.[0]?.message?.content
       if (nsText) {
         fullText = nsText
         yield { type: 'event', event: onChunk(nsText) }
       }
+    } catch {
+      // non-streaming fallback failed silently
     }
   }
 
@@ -1067,9 +1117,25 @@ function nativeSystemPrompt(
     `- Don't ask "should I..." for obvious next steps. Just do them.\n` +
     `- Found a bug while working on something else? Fix it. Don't mention it — fix it.\n` +
     `- See an opportunity to improve code quality? Take it. That's your job.\n` +
-    `- If you need data to make a decision, go get it. No hesitation.` +
+    `- If you need data to make a decision, go get it. No hesitation.\n` +
+    `\n### Loop Prevention (Circuit Breaker — Will Trip)\n` +
+    `- If you read the same file 3+ times without editing, the breaker trips.\n` +
+    `- Identical tool calls 3x consecutively? The breaker trips.\n` +
+    `- 12+ reads without a single write/edit? The breaker trips.\n` +
+    `- When the breaker trips, a <system-reminder> is injected: CHANGE APPROACH. Do NOT retry.\n` +
+    `- Stuck? Stop reading. Switch to a different tactic: grep for what you need, write code, run a command.\n` +
+    `\n### Post-Edit Verification (MANDATORY)\n` +
+    `- After writing code, ALWAYS: read it back, check syntax, run tests if available.\n` +
+    `- If you report a test result, include RAW output. No fabrication.\n` +
+    `- File contents you cite must have been READ this turn. Guessing = hallucination.\n` +
+    `- "I ran X and got Y" — Y must be real, not expected.` +
     providerSpecificTips +
-    `\n\n### Skill Execution (MANDATORY — NOT Optional)\n` +
+    `\n\n### Multi-Model Orchestration\n` +
+    `You can delegate tasks to specialized models using /delegate. For deep reasoning use Claude. ` +
+    `For fast research/testing use DeepSeek or Haiku. For frontend use GPT-4o or Claude. ` +
+    `The /delegate skill auto-classifies tasks and recommends the best model. ` +
+    `AgentTool workers are fully independent — write self-contained prompts.\n` +
+    `\n### Skill Execution (MANDATORY — NOT Optional)\n` +
     `When the user's request matches a skill's purpose, you MUST execute that skill BEFORE writing code. This is required, not a suggestion. Do not skip skills. Do not implement directly without invoking the relevant skill first.\n\n` +
     `Skill matching examples:\n` +
     `- User asks "test this" or "run tests" → MUST call /test first\n` +
@@ -1331,8 +1397,27 @@ function isTransientError(e: Error): boolean {
     msg.includes('Internal Server Error') ||
     msg.includes('ECONNRESET') ||
     msg.includes('ETIMEDOUT') ||
-    msg.includes('socket hang up')
+    msg.includes('socket hang up') ||
+    // Google Gemini specific transient errors
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('DEADLINE_EXCEEDED') ||
+    msg.includes('INTERNAL') ||
+    msg.includes('quota_exceeded') ||
+    msg.includes('Aborted') ||
+    msg.includes('CANCELLED')
   )
+}
+
+function classifyNativeError(e: Error): string {
+  const msg = e.message || ''
+  if (msg.includes('429') || msg.includes('rate_limit') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota_exceeded')) return 'rate_limit'
+  if (msg.includes('401') || msg.includes('403') || msg.includes('api key') || msg.includes('API_KEY')) return 'auth_error'
+  if (msg.includes('timeout') || msg.includes('ETIMEDOUT') || msg.includes('DEADLINE_EXCEEDED') || msg.includes('AbortError')) return 'timeout'
+  if (msg.includes('400') && (msg.includes('context') || msg.includes('length') || msg.includes('max_tokens') || msg.includes('prompt'))) return 'prompt_too_long'
+  if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504') || msg.includes('UNAVAILABLE') || msg.includes('INTERNAL')) return 'server_error'
+  if (msg.includes('ECONNRESET') || msg.includes('socket hang up') || msg.includes('fetch failed') || msg.includes('network')) return 'connection_error'
+  return 'unknown'
 }
 
 function readPositiveIntEnv(name: string, fallback: number): number {
