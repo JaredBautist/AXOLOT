@@ -20,6 +20,7 @@ import { CondensedLogo } from './CondensedLogo.js';
 import { OffscreenFreeze } from '../OffscreenFreeze.js';
 import { checkForReleaseNotesSync } from '../../utils/releaseNotes.js';
 import { getDumpPromptsPath } from 'src/services/api/dumpPrompts.js';
+import { isEnvTruthy } from 'src/utils/envUtils.js';
 import { getStartupPerfLogPath, isDetailedProfilingEnabled } from 'src/utils/startupProfiler.js';
 import { EmergencyTip } from './EmergencyTip.js';
 import { VoiceModeNotice } from './VoiceModeNotice.js';
@@ -114,7 +115,7 @@ export function LogoV2() {
   useEffect(t2, t3);
   let t4;
   if ($[5] === Symbol.for("react.memo_cache_sentinel")) {
-    t4 = false;
+    t4 = !hasReleaseNotes && !showOnboarding && !isEnvTruthy(process.env.CLAUDE_CODE_FORCE_FULL_LOGO);
     $[5] = t4;
   } else {
     t4 = $[5];
@@ -176,7 +177,7 @@ export function LogoV2() {
     t10 = $[14];
   }
   const modelDisplayName = t10;
-  if (false) {
+  if (!hasReleaseNotes && !showOnboarding && !isEnvTruthy(process.env.CLAUDE_CODE_FORCE_FULL_LOGO)) {
     let t11;
     let t12;
     let t13;
