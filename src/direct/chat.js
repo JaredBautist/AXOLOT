@@ -13,18 +13,28 @@ import {
   getConfigPath,
   getCredentialType,
   getDefaultModel,
+  getProxyConfig,
   hasActiveProvider,
   saveApiKey,
   setActiveProvider,
   setDefaultModel,
 } from './config.js'
 
+const PROXY_CLEANUP_KEYS = [
+  'ANTHROPIC_API_URL',
+  'AXOLOT_OPENCLAW_MODE',
+  'UPSTREAM_URL',
+  'UPSTREAM_MODEL',
+  'UPSTREAM_PROVIDER',
+  'UPSTREAM_AUTH',
+]
+
 const program = new Command()
 
 program
   .name('axolot')
   .description('Fast direct multi-provider AI CLI')
-  .version('0.3.8')
+  .version('0.3.9')
   .argument('[prompt...]', 'prompt text')
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')
@@ -242,13 +252,20 @@ async function launchTui() {
     }
   }
 
-  delete env.ANTHROPIC_API_URL
-  delete env.ANTHROPIC_BASE_URL
-  delete env.AXOLOT_OPENCLAW_MODE
-  delete env.UPSTREAM_URL
-  delete env.UPSTREAM_MODEL
-  delete env.UPSTREAM_PROVIDER
-  delete env.UPSTREAM_AUTH
+  // Si hay proxy configurado para claude, preservamos sus env vars
+  const hasProxy = providerName === 'claude' && getProxyConfig('claude')
+  if (hasProxy) {
+    const proxyCfg = getProxyConfig('claude')
+    env.ANTHROPIC_BASE_URL = proxyCfg.baseURL
+    if (proxyCfg.authToken) {
+      env.ANTHROPIC_API_KEY = proxyCfg.authToken
+    }
+  } else {
+    delete env.ANTHROPIC_BASE_URL
+  }
+  for (const key of PROXY_CLEANUP_KEYS) {
+    delete env[key]
+  }
 
   const args = [
     'run',
