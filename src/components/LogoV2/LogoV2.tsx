@@ -178,7 +178,7 @@ export function LogoV2() {
   const modelDisplayName = t10;
   const layoutMode = getLayoutMode(columns);
   const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-  const borderTitle = ` ${color("claude", userTheme)("Axolot")} ${color("inactive", userTheme)("v1.0.0")} `;
+  const borderTitle = ` ${color("claude", userTheme)("Axolot")} ${color("inactive", userTheme)(`v${version}`)} `;
   const compactBorderTitle = color("claude", userTheme)(" Axolot ");
   if (layoutMode === "compact") {
     let welcomeMessage = formatWelcomeMessage(username);
