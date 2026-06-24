@@ -155,7 +155,8 @@ export function applyProxyEnv(provider) {
   process.env.AXOLOT_PROXY_ACTIVE = '1'
   process.env.ANTHROPIC_BASE_URL = proxy.baseURL
   if (proxy.authToken) {
-    process.env.ANTHROPIC_AUTH_TOKEN = proxy.authToken
+    process.env.ANTHROPIC_API_KEY = proxy.authToken
+    delete process.env.ANTHROPIC_AUTH_TOKEN
   }
   if (proxy.models?.opus) {
     process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = proxy.models.opus

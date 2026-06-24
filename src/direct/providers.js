@@ -7,10 +7,8 @@ export class ClaudeProvider {
   constructor({ apiKey }) {
     applyProxyEnv('claude')
     const proxy = getProxyConfig('claude')
-    const clientOptions = proxy?.authToken
-      ? { authToken: proxy.authToken }
-      : { apiKey }
-    this.client = new Anthropic(clientOptions)
+    const effectiveKey = proxy?.authToken || apiKey
+    this.client = new Anthropic({ apiKey: effectiveKey })
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
