@@ -126,6 +126,44 @@ export function getDefaultModel(provider = getActiveProvider()) {
   return store.get(`models.${normalized}`) || DEFAULT_MODELS[normalized]
 }
 
+export function saveProxyConfig(provider, baseURL, authToken, modelOverrides = {}) {
+  const normalized = normalizeProvider(provider)
+  store.set(`proxy.${normalized}`, {
+    baseURL: String(baseURL || '').trim(),
+    authToken: String(authToken || '').trim(),
+    models: modelOverrides,
+  })
+}
+
+export function getProxyConfig(provider) {
+  const normalized = normalizeProvider(provider)
+  return store.get(`proxy.${normalized}`) || null
+}
+
+export function clearProxyConfig(provider) {
+  const normalized = normalizeProvider(provider)
+  store.delete(`proxy.${normalized}`)
+}
+
+export function applyProxyEnv(provider) {
+  const proxy = getProxyConfig(provider)
+  if (!proxy || !proxy.baseURL) return
+
+  process.env.ANTHROPIC_BASE_URL = proxy.baseURL
+  if (proxy.authToken) {
+    process.env.ANTHROPIC_AUTH_TOKEN = proxy.authToken
+  }
+  if (proxy.models?.opus) {
+    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = proxy.models.opus
+  }
+  if (proxy.models?.sonnet) {
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = proxy.models.sonnet
+  }
+  if (proxy.models?.haiku) {
+    process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = proxy.models.haiku
+  }
+}
+
 export function getConfigPath() {
   return store.path
 }

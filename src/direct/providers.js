@@ -1,11 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { normalizeProvider } from './config.js'
+import { applyProxyEnv, getProxyConfig, normalizeProvider } from './config.js'
 
 export class ClaudeProvider {
   constructor({ apiKey }) {
-    this.client = new Anthropic({ apiKey })
+    applyProxyEnv('claude')
+    const proxy = getProxyConfig('claude')
+    const clientOptions = proxy?.authToken
+      ? { authToken: proxy.authToken }
+      : { apiKey }
+    this.client = new Anthropic(clientOptions)
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {

@@ -64,6 +64,8 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 **Ask first:**
 
 - Sending emails, tweets, public posts
+- `git push` a GitHub
+- `npm publish` o cualquier publicación de paquetes
 - Anything that leaves the machine
 - Anything you're uncertain about
 
