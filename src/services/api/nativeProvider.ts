@@ -689,7 +689,7 @@ async function* streamMiniMax(
   const toolCalls = [...toolCallChunks.values()]
     .filter(call => call.name)
     .map(call => ({
-      id: randomUUID(),
+      id: call.id || randomUUID(),
       name: call.name,
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))

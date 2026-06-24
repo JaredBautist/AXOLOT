@@ -73,6 +73,14 @@ const REGISTRY: ModelEntry[] = [
     avoidFor: ['quick_answer', 'testing'],
   },
   {
+    id: 'claude-opus-4-8',
+    provider: 'anthropic',
+    name: 'Claude Opus 4.8',
+    capabilities: { reasoning: 10, coding: 10, toolUse: 10, costEfficiency: 3, speed: 4, contextWindow: 200_000, cutoff: 'June 2026' },
+    bestFor: ['architecture', 'planning', 'security_review', 'code_review', 'debugging'],
+    avoidFor: ['quick_answer', 'testing'],
+  },
+  {
     id: 'claude-haiku-4-5-20251001',
     provider: 'anthropic',
     name: 'Claude Haiku 4.5',

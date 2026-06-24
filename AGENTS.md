@@ -50,6 +50,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - Don't exfiltrate private data. Ever.
 - Don't run destructive commands without asking.
 - `trash` > `rm` (recoverable beats gone forever)
+- **NUNCA tocar el diseño de la TUI** (branding, logos, layouts, arte ASCII) sin autorización explícita del usuario
 - When in doubt, ask.
 
 ## External vs Internal
