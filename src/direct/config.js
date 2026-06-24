@@ -147,8 +147,12 @@ export function clearProxyConfig(provider) {
 
 export function applyProxyEnv(provider) {
   const proxy = getProxyConfig(provider)
-  if (!proxy || !proxy.baseURL) return
+  if (!proxy || !proxy.baseURL) {
+    delete process.env.AXOLOT_PROXY_ACTIVE
+    return
+  }
 
+  process.env.AXOLOT_PROXY_ACTIVE = '1'
   process.env.ANTHROPIC_BASE_URL = proxy.baseURL
   if (proxy.authToken) {
     process.env.ANTHROPIC_AUTH_TOKEN = proxy.authToken

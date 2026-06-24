@@ -370,10 +370,11 @@ export function getCacheControl({
   ttl?: '1h'
   scope?: CacheScope
 } {
+  const isProxyActive = process.env.AXOLOT_PROXY_ACTIVE === '1'
   return {
     type: 'ephemeral',
-    ...(should1hCacheTTL(querySource) && { ttl: '1h' }),
-    ...(scope === 'global' && { scope }),
+    ...(should1hCacheTTL(querySource) && !isProxyActive && { ttl: '1h' }),
+    ...(scope === 'global' && !isProxyActive && { scope }),
   }
 }
 
