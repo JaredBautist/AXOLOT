@@ -320,7 +320,7 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
     return <ShowModelAndClose onDone={onDone} />;
   }
   if (COMMON_HELP_ARGS.includes(args)) {
-    onDone(isAxolotOpenClawMode() ? 'Run /model to pick AI provider/model, /model login to connect a provider, or /model [provider/model] to set a model.' : 'Run /model to open the model selection menu, or /model [modelName] to set the model.', {
+    onDone('Run /model to pick AI provider/model, /model login to connect a provider, or /model [provider/model] to set a model.', {
       display: 'system'
     });
     return;
@@ -331,10 +331,7 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
     });
     return <SetModelAndClose args={args} onDone={onDone} />;
   }
-  if (isAxolotOpenClawMode()) {
-    return <AxolotOpenClawModelPicker onDone={onDone} />;
-  }
-  return <ModelPickerWrapper onDone={onDone} />;
+  return <AxolotOpenClawModelPicker onDone={onDone} />;
 };
 function renderModelLabel(model: string | null): string {
   const rendered = renderDefaultModelSetting(model ?? getDefaultMainLoopModelSetting());
