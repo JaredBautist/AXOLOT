@@ -241,7 +241,7 @@ export function LogoV2() {
       const _welcomeMsg = formatWelcomeMessage(username);
       const _headerEl = <Box marginTop={1}><Text bold={true}>{_welcomeMsg}</Text><Text dimColor={true}>  v{version}</Text></Box>;
       const _feedEl = <FeedColumn feeds={[createRecentActivityFeed(activities)]} maxWidth={columns} />;
-      t23 = <>{t11}{_headerEl}{_feedEl}{t12}{t13}{t14}{t15}{t16}{t17}{t18}{t19}{t20}{t21}{t22}</>;
+      t23 = <><OffscreenFreeze><Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} paddingY={1} alignItems="center" width={columns}>{t11}{_headerEl}{_feedEl}</Box></OffscreenFreeze>{t12}{t13}{t14}{t15}{t16}{t17}{t18}{t19}{t20}{t21}{t22}</>;
       $[29] = t18;
       $[30] = t23;
     } else {
