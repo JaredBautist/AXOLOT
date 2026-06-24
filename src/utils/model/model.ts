@@ -218,9 +218,6 @@ export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
   name = name.toLowerCase()
   // Special cases for Claude 4+ models to differentiate versions
   // Order matters: check more specific versions first (4-5 before 4)
-  if (name.includes('claude-opus-4-8')) {
-    return 'claude-opus-4-8'
-  }
   if (name.includes('claude-opus-4-6')) {
     return 'claude-opus-4-6'
   }
@@ -394,8 +391,6 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
       return 'Qwen 2.5 Coder 3B (Ollama)'
     case 'gemma1b':
       return 'Gemma 3 1B (Ollama)'
-    case getModelStrings().opus48:
-      return 'Opus 4.8'
     case getModelStrings().opus46:
       return 'Opus 4.6'
     case getModelStrings().opus46 + '[1m]':
@@ -644,9 +639,6 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
   const has1m = modelId.toLowerCase().includes('[1m]')
   const canonical = getCanonicalName(modelId)
 
-  if (canonical.includes('claude-opus-4-8')) {
-    return 'Opus 4.8'
-  }
   if (canonical.includes('claude-opus-4-6')) {
     return has1m ? 'Opus 4.6 (with 1M context)' : 'Opus 4.6'
   }
