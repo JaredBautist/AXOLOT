@@ -23,6 +23,7 @@ import {
 } from '../../bootstrap/state.js'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { isDebugToStdErr, logForDebugging } from '../../utils/debug.js'
+import { applyProxyEnv } from '../../direct/config.js'
 import {
   getAWSRegion,
   getVertexRegionForModel,
@@ -296,6 +297,9 @@ export async function getAnthropicClient({
     // we have always been lying about the return type - this doesn't support batching or models
     return new AnthropicVertex(vertexArgs) as unknown as Anthropic
   }
+
+  // Apply proxy config if available (sets ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN)
+  applyProxyEnv('claude')
 
   // Determine authentication method based on available tokens
   const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
