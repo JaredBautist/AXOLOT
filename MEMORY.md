@@ -30,3 +30,26 @@
 - `AXOLOT_AUTO_NATIVE=1` activa auto-selección de provider nativo
 - `AXOLOT_BUDGET_MODE` = cost/speed/balanced/quality
 - `profileProject()` detecta lenguaje y tipo de proyecto automáticamente
+
+## Lecciones Aprendidas (24 Jun 2026)
+
+### TUI: Lo que SÍ se puede hacer
+El usuario QUIERE el ajolote rosado (`AxolotASCIILogo.tsx`) en lugar del cangrejo Clawd + "Claude Code". Lo que NO quiere:
+- Layout completo con feeds, release notes, onboarding (lento)
+- Dos mascotas visibles al mismo tiempo
+- Cambios no autorizados al branding/arte ASCII
+
+### Cómo implementar cambios en LogoV2.tsx
+- **Early return condensado** (línea 180): es rápido, solo renderiza `CondensedLogo`/`AxolotASCIILogo` + notices
+- **Layout completo** (después de línea 250): renderiza todo, es lento
+- Para mostrar el ajolote: cambiar `t11 = <CondensedLogo />` → `t11 = <AxolotASCIILogo />`
+- No olvidar remover el import de `CondensedLogo` si queda sin usar (error tsc)
+
+### Flujo de trabajo con este usuario
+- Preguntar ANTES de hacer cualquier cambio visual
+- Si dice "déjalo como estaba", revertir al commit original, no al último cambio mío
+- No force-push si ya se publicó a npm (no se puede publicar misma versión dos veces)
+- Usar `npm version patch --no-git-tag-version` y commit nuevo en vez de amend
+
+### Versiones
+- `0.2.9` es la versión estable actual: TUI con ajolote, rápido, sin Clawd

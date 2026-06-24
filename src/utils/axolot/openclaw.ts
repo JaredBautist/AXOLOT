@@ -55,7 +55,12 @@ export function runOpenClawInteractive(args: string[]): { ok: boolean } {
   }
 }
 
+const _configCache = new Map<string, string>()
+
 export function getOpenClawConfig(path: string): string {
+  const cached = _configCache.get(path)
+  if (cached !== undefined) return cached
+
   try {
     const configPath = join(process.env.HOME ?? '', '.openclaw', 'openclaw.json')
     const config = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -73,29 +78,42 @@ export function getOpenClawConfig(path: string): string {
       value !== null &&
       typeof value !== 'object'
     ) {
-      return String(value)
+      const result = String(value)
+      _configCache.set(path, result)
+      return result
     }
   } catch {
     // Fall back to the CLI.
   }
 
   try {
-    return execFileSync('openclaw', ['config', 'get', path], {
+    const result = execFileSync('openclaw', ['config', 'get', path], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
+    _configCache.set(path, result)
+    return result
   } catch {
+    _configCache.set(path, '')
     return ''
   }
 }
 
+let _cachedPrimaryModel: string | null = null
+
 export function getOpenClawPrimaryModel(): string {
+  if (_cachedPrimaryModel) return _cachedPrimaryModel
+
   if (isAxolotNativeMode()) {
-    return process.env.ANTHROPIC_MODEL || directModelRef()
+    _cachedPrimaryModel = process.env.ANTHROPIC_MODEL || directModelRef()
+    return _cachedPrimaryModel
   }
 
   const configured = getOpenClawConfig('agents.defaults.model.primary')
-  if (configured) return configured
+  if (configured) {
+    _cachedPrimaryModel = configured
+    return configured
+  }
 
   try {
     const model = execFileSync('openclaw', ['models', 'status', '--plain'], {
@@ -106,12 +124,16 @@ export function getOpenClawPrimaryModel(): string {
       .split('\n')[0]
       ?.trim()
 
-    if (model) return model
+    if (model) {
+      _cachedPrimaryModel = model
+      return model
+    }
   } catch {
     // Fall through to config.
   }
 
-  return getOpenClawConfig('agents.defaults.model.primary')
+  _cachedPrimaryModel = getOpenClawConfig('agents.defaults.model.primary')
+  return _cachedPrimaryModel
 }
 
 export function getOpenClawProviderLabel(model: string | null): string {
@@ -144,7 +166,11 @@ export function getOpenClawProviderLabel(model: string | null): string {
   return `${provider} via OpenClaw`
 }
 
+let _cachedModels: OpenClawModel[] | null = null
+
 export function listOpenClawModels(): OpenClawModel[] {
+  if (_cachedModels) return _cachedModels
+
   if (isAxolotNativeMode()) {
     const models = [
       directModel('claude', 'claude-3-5-sonnet-latest', 'Anthropic API'),
@@ -163,6 +189,7 @@ export function listOpenClawModels(): OpenClawModel[] {
       )
     }
 
+    _cachedModels = models
     return models
   }
 
@@ -173,6 +200,7 @@ export function listOpenClawModels(): OpenClawModel[] {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
   } catch {
+    _cachedModels = []
     return []
   }
 
@@ -181,7 +209,7 @@ export function listOpenClawModels(): OpenClawModel[] {
     .map(line => line.trim())
     .filter(line => line && !line.startsWith('Model '))
 
-  return rows.flatMap(line => {
+  _cachedModels = rows.flatMap(line => {
     const parts = line.split(/\s{2,}/)
     const [id, input = '', context = '', local = '', auth = '', tags = ''] =
       parts
@@ -202,6 +230,7 @@ export function listOpenClawModels(): OpenClawModel[] {
       },
     ]
   })
+  return _cachedModels
 }
 
 export function setOpenClawModel(model: string): {

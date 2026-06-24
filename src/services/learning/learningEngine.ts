@@ -66,23 +66,37 @@ export function getLearningStatePath(cwd = getCwd()): string {
   return join(getLearningDir(cwd), 'state.json')
 }
 
+let _cachedLearningState: { state: LearningState; ts: number } | null = null
+
 export function loadLearningState(cwd = getCwd()): LearningState {
+  const now = Date.now()
+  if (_cachedLearningState && now - _cachedLearningState.ts < 2000) {
+    return _cachedLearningState.state
+  }
+
   const statePath = getLearningStatePath(cwd)
-  if (!existsSync(statePath)) return emptyState()
+  if (!existsSync(statePath)) {
+    _cachedLearningState = { state: emptyState(), ts: now }
+    return emptyState()
+  }
 
   try {
     const parsed = JSON.parse(readFileSync(statePath, 'utf-8'))
-    return normalizeState(parsed)
+    const state = normalizeState(parsed)
+    _cachedLearningState = { state, ts: now }
+    return state
   } catch (e) {
     logForDebugging(
       `Failed to load learning state ${statePath}: ${e instanceof Error ? e.message : String(e)}`,
       { level: 'warn' },
     )
+    _cachedLearningState = { state: emptyState(), ts: now }
     return emptyState()
   }
 }
 
 export function saveLearningState(state: LearningState, cwd = getCwd()): void {
+  _cachedLearningState = null
   const dir = getLearningDir(cwd)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   writeFileSync(getLearningStatePath(cwd), JSON.stringify(state, null, 2), {
