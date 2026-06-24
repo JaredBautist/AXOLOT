@@ -119,7 +119,7 @@ export function LogoV2() {
   } else {
     t4 = $[5];
   }
-  const isCondensedMode = t4;
+  const isCondensedMode = false;
   let t5;
   let t6;
   if ($[6] !== showGuestPassesUpsell) {
@@ -176,80 +176,6 @@ export function LogoV2() {
     t10 = $[14];
   }
   const modelDisplayName = t10;
-  if (!hasReleaseNotes && !showOnboarding && !isEnvTruthy(process.env.CLAUDE_CODE_FORCE_FULL_LOGO)) {
-    let t11;
-    let t12;
-    let t13;
-    let t14;
-    let t15;
-    let t16;
-    let t17;
-    if ($[15] === Symbol.for("react.memo_cache_sentinel")) {
-      t11 = <AxolotASCIILogo />;
-      t12 = <VoiceModeNotice />;
-      t13 = <Opus1mMergeNotice />;
-      t14 = ChannelsNoticeModule && <ChannelsNoticeModule.ChannelsNotice />;
-      t15 = isDebugMode() && <Box paddingLeft={2} flexDirection="column"><Text color="warning">Debug mode enabled</Text><Text dimColor={true}>Logging to: {isDebugToStdErr() ? "stderr" : getDebugLogPath()}</Text></Box>;
-      t16 = <EmergencyTip />;
-      t17 = process.env.CLAUDE_CODE_TMUX_SESSION && <Box paddingLeft={2} flexDirection="column"><Text dimColor={true}>tmux session: {process.env.CLAUDE_CODE_TMUX_SESSION}</Text><Text dimColor={true}>{process.env.CLAUDE_CODE_TMUX_PREFIX_CONFLICTS ? `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} ${process.env.CLAUDE_CODE_TMUX_PREFIX} d (press prefix twice - Claude uses ${process.env.CLAUDE_CODE_TMUX_PREFIX})` : `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} d`}</Text></Box>;
-      $[15] = t11;
-      $[16] = t12;
-      $[17] = t13;
-      $[18] = t14;
-      $[19] = t15;
-      $[20] = t16;
-      $[21] = t17;
-    } else {
-      t11 = $[15];
-      t12 = $[16];
-      t13 = $[17];
-      t14 = $[18];
-      t15 = $[19];
-      t16 = $[20];
-      t17 = $[21];
-    }
-    let t18;
-    if ($[22] !== announcement || $[23] !== config) {
-      t18 = announcement && <Box paddingLeft={2} flexDirection="column">{!process.env.IS_DEMO && config.oauthAccount?.organizationName && <Text dimColor={true}>Message from {config.oauthAccount.organizationName}:</Text>}<Text>{announcement}</Text></Box>;
-      $[22] = announcement;
-      $[23] = config;
-      $[24] = t18;
-    } else {
-      t18 = $[24];
-    }
-    let t19;
-    let t20;
-    let t21;
-    let t22;
-    if ($[25] === Symbol.for("react.memo_cache_sentinel")) {
-      t19 = false && !process.env.DEMO_VERSION && <Box paddingLeft={2} flexDirection="column"><Text dimColor={true}>Use /issue to report model behavior issues</Text></Box>;
-      t20 = false && !process.env.DEMO_VERSION && <Box paddingLeft={2} flexDirection="column"><Text color="warning">[ANT-ONLY] Logs:</Text><Text dimColor={true}>API calls: {getDisplayPath(getDumpPromptsPath())}</Text><Text dimColor={true}>Debug logs: {getDisplayPath(getDebugLogPath())}</Text>{isDetailedProfilingEnabled() && <Text dimColor={true}>Startup Perf: {getDisplayPath(getStartupPerfLogPath())}</Text>}</Box>;
-      t21 = false && <GateOverridesWarning />;
-      t22 = false && <ExperimentEnrollmentNotice />;
-      $[25] = t19;
-      $[26] = t20;
-      $[27] = t21;
-      $[28] = t22;
-    } else {
-      t19 = $[25];
-      t20 = $[26];
-      t21 = $[27];
-      t22 = $[28];
-    }
-    let t23;
-    if ($[29] !== t18) {
-      const _welcomeMsg = formatWelcomeMessage(username);
-      const _headerEl = <Box marginTop={1}><Text bold={true}>{_welcomeMsg}</Text><Text dimColor={true}>  v{version}</Text></Box>;
-      const _feedEl = <FeedColumn feeds={[createRecentActivityFeed(activities)]} maxWidth={columns} />;
-      const _borderText = { content: " Axolot ", position: "top" as const, align: "start" as const, offset: 1 };
-      t23 = <><OffscreenFreeze><Box flexDirection="column" borderStyle="round" borderColor="claude" borderText={_borderText} paddingX={1} paddingY={1} alignItems="center" width={columns}>{t11}{_headerEl}{_feedEl}</Box></OffscreenFreeze>{t12}{t13}{t14}{t15}{t16}{t17}{t18}{t19}{t20}{t21}{t22}</>;
-      $[29] = t18;
-      $[30] = t23;
-    } else {
-      t23 = $[30];
-    }
-    return t23;
-  }
   const layoutMode = getLayoutMode(columns);
   const userTheme = resolveThemeSetting(getGlobalConfig().theme);
   const borderTitle = ` ${color("claude", userTheme)("Axolot")} ${color("inactive", userTheme)("v1.0.0")} `;
