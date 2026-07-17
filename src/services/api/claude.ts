@@ -785,6 +785,7 @@ export async function* queryModelWithStreaming({
         allowedAgentTypes: options.allowedAgentTypes,
         isNonInteractiveSession: options.isNonInteractiveSession,
       },
+      thinkingConfig,
     })
     return
   }

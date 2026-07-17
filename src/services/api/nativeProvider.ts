@@ -8,14 +8,21 @@ import type {
 } from '../../types/message.js'
 import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
 import type { ToolPermissionContext, Tools } from '../../Tool.js'
+import type { ThinkingConfig } from '../../utils/thinking.js'
 import { toolToAPISchema } from '../../utils/api.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../constants/prompts.js'
-import { FRONTEND_DESIGN_PROMPT } from '../../skills/bundled/frontendDesign.js'
-import { CORE_QUALITY_STANDARDS } from '../../constants/qualityStandards.js'
-import { getRoutingInstructions } from '../../services/orchestration/taskRouter.js'
 import { selectSmartModel, detectAvailableProviders, profileProject, inferTaskTypes } from '../../services/orchestration/smartDefaults.js'
+import {
+  buildNativeFrontendPromptModule,
+  buildNativeProviderPromptModule,
+  buildNativeSelfReviewModule,
+  buildNativeSkillPromptModule,
+  buildNativeTaskPromptModule,
+  inferNativePromptTask,
+  shouldIncludeNativeFrontendPrompt,
+} from './nativePromptModules.js'
 import Conf from 'conf'
 
 const directStore = new Conf({
@@ -51,6 +58,10 @@ type NativeToolCall = {
   name: string
   input: Record<string, unknown>
 }
+
+type NativeChunkKind = 'text' | 'thinking'
+
+type NativeEmitChunk = (kind: NativeChunkKind, chunk: string) => StreamEvent[]
 
 export function getNativeProviderRoute(model: string): NativeRoute | null {
   const raw = String(model || '').trim()
@@ -121,6 +132,7 @@ export async function* queryNativeProvider({
   model,
   tools,
   options,
+  thinkingConfig,
 }: {
   messages: Message[]
   systemPrompt: SystemPrompt
@@ -128,6 +140,7 @@ export async function* queryNativeProvider({
   model: string
   tools: Tools
   options: NativeToolOptions
+  thinkingConfig?: ThinkingConfig
 }): AsyncGenerator<StreamEvent | AssistantMessage | SystemAPIErrorMessage> {
   const route = getNativeProviderRoute(model)
   if (!route) return
@@ -148,59 +161,104 @@ export async function* queryNativeProvider({
         usage: emptyUsage(),
       },
     }, 0)
-    yield fakeStreamEvent({
-      type: 'content_block_start',
-      index: 0,
-      content_block: { type: 'text', text: '' },
-    })
 
     let text = ''
+    let thinkingText = ''
     let toolCalls: NativeToolCall[] = []
-    const onChunk = (chunk: string) => {
-      text += chunk
-      return fakeStreamEvent({
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: chunk },
-      })
+    let blockIndex = -1
+    let currentBlock: 'text' | 'thinking' | null = null
+
+    // Reasoning models interleave thinking and answer chunks; open a new
+    // content block whenever the chunk kind changes so the TUI renders both.
+    const emitChunk = (kind: NativeChunkKind, chunk: string): StreamEvent[] => {
+      const events: StreamEvent[] = []
+      if (currentBlock !== kind) {
+        if (currentBlock !== null) {
+          events.push(fakeStreamEvent({ type: 'content_block_stop', index: blockIndex }))
+        }
+        blockIndex++
+        events.push(
+          fakeStreamEvent({
+            type: 'content_block_start',
+            index: blockIndex,
+            content_block:
+              kind === 'text'
+                ? { type: 'text', text: '' }
+                : { type: 'thinking', thinking: '', signature: '' },
+          }),
+        )
+        currentBlock = kind
+      }
+      if (kind === 'text') {
+        text += chunk
+        events.push(
+          fakeStreamEvent({
+            type: 'content_block_delta',
+            index: blockIndex,
+            delta: { type: 'text_delta', text: chunk },
+          }),
+        )
+      } else {
+        thinkingText += chunk
+        events.push(
+          fakeStreamEvent({
+            type: 'content_block_delta',
+            index: blockIndex,
+            delta: { type: 'thinking_delta', thinking: chunk },
+          }),
+        )
+      }
+      return events
     }
 
     if (route.provider === 'openai') {
-      for await (const event of streamOpenAI(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+      for await (const event of streamOpenAI(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
     } else if (route.provider === 'deepseek') {
-      for await (const event of streamDeepSeek(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+      for await (const event of streamDeepSeek(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk, thinkingConfig)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
     } else if (route.provider === 'minimax') {
-      for await (const event of streamMiniMax(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, onChunk)) {
+      for await (const event of streamMiniMax(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
     } else {
-      for await (const event of streamGemini(route.model, nativeMessages, systemPrompt, signal, nativeTools.gemini, onChunk)) {
+      for await (const event of streamGemini(route.model, nativeMessages, systemPrompt, signal, nativeTools.gemini, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
     }
 
-    yield fakeStreamEvent({
-      type: 'content_block_stop',
-      index: 0,
-    })
+    if (currentBlock !== null) {
+      yield fakeStreamEvent({ type: 'content_block_stop', index: blockIndex })
+    } else {
+      yield fakeStreamEvent({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+      })
+      yield fakeStreamEvent({ type: 'content_block_stop', index: 0 })
+    }
     yield fakeStreamEvent({
       type: 'message_delta',
       delta: { stop_reason: toolCalls.length > 0 ? 'tool_use' : 'end_turn', stop_sequence: null },
       usage: {
-        output_tokens: Math.max(1, Math.ceil(text.length / 4)),
+        output_tokens: Math.max(1, Math.ceil((text.length + thinkingText.length) / 4)),
       },
     })
     yield fakeStreamEvent({ type: 'message_stop' })
 
-    yield createNativeAssistantMessage(model, text, toolCalls)
+    yield createNativeAssistantMessage(
+      model,
+      text,
+      toolCalls,
+      estimateNativeInputTokens(nativeMessages, systemPrompt),
+      thinkingText.length,
+    )
   } catch (error) {
     if (signal.aborted) return
     const classified = classifyNativeError(error instanceof Error ? error : new Error(String(error)))
@@ -259,7 +317,7 @@ async function* streamOpenAI(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: OpenAIToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = await ensureOpenAIToken()
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
@@ -268,9 +326,9 @@ async function* streamOpenAI(
     (directStore.get('credentialType.openai') as string) === 'oauth'
 
   if (isOAuthKey) {
-    yield* streamOpenAIResponses(model, messages, systemPrompt, signal, tools, onChunk, apiKey)
+    yield* streamOpenAIResponses(model, messages, systemPrompt, signal, tools, emitChunk, apiKey)
   } else {
-    yield* streamOpenAIChat(model, messages, systemPrompt, signal, tools, onChunk, apiKey)
+    yield* streamOpenAIChat(model, messages, systemPrompt, signal, tools, emitChunk, apiKey)
   }
 }
 
@@ -280,7 +338,7 @@ async function* streamOpenAIChat(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: OpenAIToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
   apiKey: string,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const { default: OpenAI } = await import('openai')
@@ -292,8 +350,8 @@ async function* streamOpenAIChat(
         model,
         stream: true,
         messages: [
-          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'openai') },
-          ...messagesToOpenAIChat(messages),
+          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'openai', messages, model) },
+          ...messagesToOpenAIChat(messages, true),
         ],
         ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
       },
@@ -302,8 +360,15 @@ async function* streamOpenAIChat(
   )
 
   for await (const part of stream) {
+    const rawDelta = part.choices?.[0]?.delta as Record<string, unknown> | undefined
+    const reasoning = extractReasoningDelta(rawDelta)
+    if (reasoning) {
+      for (const event of emitChunk('thinking', reasoning)) yield { type: 'event', event }
+    }
     const delta = part.choices?.[0]?.delta?.content
-    if (delta) yield { type: 'event', event: onChunk(delta) }
+    if (delta) {
+      for (const event of emitChunk('text', delta)) yield { type: 'event', event }
+    }
 
     for (const call of part.choices?.[0]?.delta?.tool_calls ?? []) {
       const index = call.index ?? 0
@@ -335,7 +400,7 @@ async function* streamOpenAIResponses(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: OpenAIToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
   apiKey: string,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const isOAuthKey =
@@ -367,7 +432,7 @@ async function* streamOpenAIResponses(
   const body = JSON.stringify({
     model,
     input,
-    instructions: nativeSystemPrompt(systemPrompt, 'openai'),
+    instructions: nativeSystemPrompt(systemPrompt, 'openai', messages, model),
     stream: true,
     store: false,
     ...(tools.length > 0 ? { tools: tools.map(toResponsesTool), tool_choice: 'auto' } : {}),
@@ -391,9 +456,23 @@ async function* streamOpenAIResponses(
   let buffer = ''
   const toolCallChunks = new Map<string, { id: string; name: string; arguments: string }>()
 
-  while (true) {
+  // Stall watchdog: if no data arrives for 60s, cancel instead of hanging forever
+  let streamTimeout: NodeJS.Timeout | null = null
+  const resetStreamTimeout = () => {
+    if (streamTimeout) clearTimeout(streamTimeout)
+    streamTimeout = setTimeout(() => {
+      streamTimeout = null
+      reader.cancel('OpenAI Responses stream stalled').catch(() => {})
+    }, 60_000)
+  }
+  resetStreamTimeout()
+
+  try {
+  let sawDone = false
+  while (!sawDone) {
     const { done, value } = await reader.read()
     if (done) break
+    resetStreamTimeout()
 
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
@@ -402,12 +481,27 @@ async function* streamOpenAIResponses(
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue
       const data = line.slice(6)
-      if (data === '[DONE]') return
+      if (data === '[DONE]') {
+        // Don't return here: the accumulated tool calls below must still be flushed.
+        sawDone = true
+        break
+      }
 
       try {
         const event = JSON.parse(data)
+        if (
+          (event.type === 'response.reasoning_summary_text.delta' ||
+            event.type === 'response.reasoning_text.delta') &&
+          event.delta
+        ) {
+          for (const streamEvent of emitChunk('thinking', String(event.delta))) {
+            yield { type: 'event', event: streamEvent }
+          }
+        }
         if (event.type === 'response.output_text.delta' && event.delta) {
-          yield { type: 'event', event: onChunk(event.delta) }
+          for (const streamEvent of emitChunk('text', String(event.delta))) {
+            yield { type: 'event', event: streamEvent }
+          }
         }
         if (event.type === 'response.function_call_arguments.delta') {
           const id = String(event.item_id || '')
@@ -423,6 +517,9 @@ async function* streamOpenAIResponses(
           const id = String(event.item.id || '')
           if (!id) continue
           const existing = toolCallChunks.get(id) ?? { id, name: '', arguments: '' }
+          // call_id (not item.id) is what function_call_output must reference
+          // when the conversation is replayed — keep it as the canonical id.
+          if (event.item.call_id) existing.id = String(event.item.call_id)
           if (event.item.name) existing.name = String(event.item.name)
           if (event.type === 'response.output_item.done') {
             existing.arguments = String(event.item.arguments || existing.arguments)
@@ -434,11 +531,14 @@ async function* streamOpenAIResponses(
       }
     }
   }
+  } finally {
+    if (streamTimeout) clearTimeout(streamTimeout)
+  }
 
   const toolCalls = [...toolCallChunks.values()]
     .filter(call => call.name)
     .map(call => ({
-      id: randomUUID(),
+      id: call.id || randomUUID(),
       name: call.name,
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
@@ -451,7 +551,7 @@ async function* streamGemini(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: GeminiToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = storeApiKey('gemini')
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
@@ -460,7 +560,7 @@ async function* streamGemini(
   const client = new GoogleGenerativeAI(apiKey)
   const genModel = client.getGenerativeModel({
     model,
-    systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini'),
+    systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini', messages, model),
     ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
   })
   const result = await retryOnTransient(() =>
@@ -477,16 +577,36 @@ async function* streamGemini(
     for (const call of extractGeminiFunctionCalls(part)) {
       toolCalls.push(call)
     }
-    const delta = part.text()
-    if (delta) yield { type: 'event', event: onChunk(delta) }
+    // Gemini thinking models mark reasoning parts with `thought: true`; the
+    // SDK's part.text() concatenates everything, so split them manually.
+    const parts = getGeminiChunkParts(part)
+    let emittedFromParts = false
+    for (const p of parts) {
+      if (typeof p?.text !== 'string' || !p.text) continue
+      emittedFromParts = true
+      const kind: NativeChunkKind = p.thought === true ? 'thinking' : 'text'
+      for (const event of emitChunk(kind, p.text)) yield { type: 'event', event }
+    }
+    if (!emittedFromParts) {
+      const delta = part.text()
+      if (delta) {
+        for (const event of emitChunk('text', delta)) yield { type: 'event', event }
+      }
+    }
   }
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
-function getDeepSeekThinking(): Record<string, unknown> {
+function getDeepSeekThinking(thinkingConfig?: ThinkingConfig): Record<string, unknown> {
+  // The user's session-level thinking toggle wins over the env default.
+  if (thinkingConfig?.type === 'disabled') return {}
   const mode = (process.env.DEEPSEEK_THINKING || 'high').toLowerCase()
   if (mode === 'off' || mode === 'false' || mode === 'none') return {}
-  const budget = readPositiveIntEnv('DEEPSEEK_THINKING_BUDGET', 0)
+  const envBudget = readPositiveIntEnv('DEEPSEEK_THINKING_BUDGET', 0)
+  const budget =
+    thinkingConfig?.type === 'enabled' && thinkingConfig.budgetTokens > 0
+      ? thinkingConfig.budgetTokens
+      : envBudget
   const thinking: Record<string, unknown> = { type: mode }
   if (budget > 0) thinking.budget_tokens = budget
   return { thinking }
@@ -498,7 +618,8 @@ async function* streamDeepSeek(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: OpenAIToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
+  thinkingConfig?: ThinkingConfig,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = storeApiKey('deepseek')
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not configured')
@@ -516,19 +637,26 @@ async function* streamDeepSeek(
         model: actualModel,
         stream: true,
         messages: [
-          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'deepseek') },
+          { role: 'system', content: nativeSystemPrompt(systemPrompt, 'deepseek', messages, actualModel) },
           ...messagesToOpenAIChat(messages),
         ],
         ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-        extra_body: getDeepSeekThinking(),
+        extra_body: getDeepSeekThinking(thinkingConfig),
       },
       { signal },
     ),
   )
 
   for await (const part of stream) {
+    const rawDelta = part.choices?.[0]?.delta as Record<string, unknown> | undefined
+    const reasoning = extractReasoningDelta(rawDelta)
+    if (reasoning) {
+      for (const event of emitChunk('thinking', reasoning)) yield { type: 'event', event }
+    }
     const delta = part.choices?.[0]?.delta?.content
-    if (delta) yield { type: 'event', event: onChunk(delta) }
+    if (delta) {
+      for (const event of emitChunk('text', delta)) yield { type: 'event', event }
+    }
 
     for (const call of part.choices?.[0]?.delta?.tool_calls ?? []) {
       const index = call.index ?? 0
@@ -560,7 +688,7 @@ async function* streamMiniMax(
   systemPrompt: SystemPrompt,
   signal: AbortSignal,
   tools: OpenAIToolSchema[],
-  onChunk: (chunk: string) => StreamEvent,
+  emitChunk: NativeEmitChunk,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = storeApiKey('minimax')
   if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured')
@@ -568,7 +696,7 @@ async function* streamMiniMax(
   const requestBody: Record<string, unknown> = {
     model,
     messages: [
-      { role: 'system', content: nativeSystemPrompt(systemPrompt, 'minimax') },
+      { role: 'system', content: nativeSystemPrompt(systemPrompt, 'minimax', messages, model) },
       ...messagesToMiniMaxChat(messages),
     ],
     max_tokens: 16384,
@@ -593,7 +721,6 @@ async function* streamMiniMax(
   const decoder = new TextDecoder()
   let buffer = ''
   let fullText = ''
-  let debugged = false
   const toolCallChunks = new Map<string, { id: string; name: string; arguments: string }>()
 
   // Stream stall watchdog: if no data arrives for 60s, abort
@@ -625,14 +752,11 @@ async function* streamMiniMax(
       try {
         const parsed = JSON.parse(rawData)
 
-        if (!debugged) {
-          debugged = true
-          const choice0 = parsed.choices?.[0]
-          const keys = Object.keys(parsed).join(', ')
-          const choiceKeys = choice0 ? Object.keys(choice0).join(', ') : 'none'
-          const delta = choice0?.delta
-          const deltaKeys = delta ? Object.keys(delta).join(', ') : 'none'
-          console.error(`[MiniMax SSE] topKeys: ${keys} | choiceKeys: ${choiceKeys} | deltaKeys: ${deltaKeys}`)
+        const reasoning = extractReasoningDelta(
+          parsed.choices?.[0]?.delta as Record<string, unknown> | undefined,
+        )
+        if (reasoning) {
+          for (const event of emitChunk('thinking', reasoning)) yield { type: 'event', event }
         }
 
         const delta =
@@ -641,7 +765,7 @@ async function* streamMiniMax(
           parsed.choices?.[0]?.delta?.text
         if (delta) {
           fullText += String(delta)
-          yield { type: 'event', event: onChunk(String(delta)) }
+          for (const event of emitChunk('text', String(delta))) yield { type: 'event', event }
         }
 
         for (const call of parsed.choices?.[0]?.delta?.tool_calls ?? []) {
@@ -679,10 +803,12 @@ async function* streamMiniMax(
       const nsText = nsResult?.choices?.[0]?.message?.content
       if (nsText) {
         fullText = nsText
-        yield { type: 'event', event: onChunk(nsText) }
+        for (const event of emitChunk('text', String(nsText))) yield { type: 'event', event }
       }
-    } catch {
-      // non-streaming fallback failed silently
+    } catch (fallbackError) {
+      // The stream produced nothing and the fallback failed too — surface the
+      // error instead of ending the turn with silent empty output.
+      if (!signal.aborted) throw fallbackError
     }
   }
 
@@ -696,8 +822,11 @@ async function* streamMiniMax(
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
-function messagesToOpenAIChat(messages: Message[]): Array<Record<string, unknown>> {
-  return messages.flatMap(message => {
+function messagesToOpenAIChat(
+  messages: Message[],
+  includeImages = false,
+): Array<Record<string, unknown>> {
+  const raw: Array<Record<string, unknown>> = messages.flatMap(message => {
     const role = (message as any).message?.role
     if (role !== 'user' && role !== 'assistant') return []
     const content = (message as any).message?.content
@@ -717,28 +846,36 @@ function messagesToOpenAIChat(messages: Message[]): Array<Record<string, unknown
 
     const toolResults = contentToToolResults(content)
     if (toolResults.length > 0) {
-      return toolResults.map(result => ({
+      const converted: Array<Record<string, unknown>> = toolResults.map(result => ({
         role: 'tool',
         tool_call_id: result.id,
         content: result.output,
       }))
+      if (includeImages) {
+        const images = contentToToolResultImages(content)
+        if (images.length > 0) {
+          converted.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: '[Image(s) attached to the preceding tool result]' },
+              ...images.map(img => ({
+                type: 'image_url',
+                image_url: { url: `data:${img.mediaType};base64,${img.data}` },
+              })),
+            ],
+          })
+        }
+      }
+      return converted
     }
 
     const text = contentToText(content)
     if (!text) return []
     return [{ role: 'user', content: text }]
   })
-}
 
-/**
- * Convert messages to OpenAI-compatible chat format for MiniMax, ensuring
- * tool results always have matching tool calls. MiniMax M3 is strict about
- * this and rejects orphaned tool results with error 2013.
- */
-function messagesToMiniMaxChat(messages: Message[]): Array<Record<string, unknown>> {
-  const raw = messagesToOpenAIChat(messages)
-
-  // Collect all tool call IDs from assistant messages
+  // Drop orphaned tool results (their tool_call was compacted away). OpenAI
+  // and MiniMax both hard-reject a `tool` message with no matching call.
   const validToolCallIds = new Set<string>()
   for (const msg of raw) {
     if (msg.role === 'assistant' && msg.tool_calls) {
@@ -747,14 +884,20 @@ function messagesToMiniMaxChat(messages: Message[]): Array<Record<string, unknow
       }
     }
   }
-
-  // Filter out orphaned tool results
   return raw.filter(msg => {
     if (msg.role === 'tool' && msg.tool_call_id && !validToolCallIds.has(msg.tool_call_id as string)) {
       return false
     }
     return true
   })
+}
+
+/**
+ * MiniMax uses the OpenAI-compatible chat format; orphan filtering now lives
+ * in messagesToOpenAIChat so every OpenAI-shaped provider benefits.
+ */
+function messagesToMiniMaxChat(messages: Message[]): Array<Record<string, unknown>> {
+  return messagesToOpenAIChat(messages)
 }
 
 function messagesToOpenAIResponses(messages: Message[]): Array<Record<string, unknown>> {
@@ -784,13 +927,27 @@ function messagesToOpenAIResponses(messages: Message[]): Array<Record<string, un
 
     const toolResults = contentToToolResults(content)
     if (toolResults.length > 0) {
-      return toolResults
+      const outputs: Array<Record<string, unknown>> = toolResults
         .filter(result => functionCallIds.has(result.id))
         .map(result => ({
           type: 'function_call_output',
           call_id: result.id,
           output: result.output,
         }))
+      const images = contentToToolResultImages(content)
+      if (outputs.length > 0 && images.length > 0) {
+        outputs.push({
+          role: 'user',
+          content: [
+            { type: 'input_text', text: '[Image(s) attached to the preceding tool result]' },
+            ...images.map(img => ({
+              type: 'input_image',
+              image_url: `data:${img.mediaType};base64,${img.data}`,
+            })),
+          ],
+        })
+      }
+      return outputs
     }
 
     const text = contentToText(content)
@@ -818,10 +975,19 @@ function messagesToGemini(messages: Message[]): Array<Record<string, unknown>> {
       content,
       toolNamesById,
     )
+    // functionResponse parts can't carry images — attach screenshots from
+    // tool results as inlineData in the same user turn (Gemini is multimodal).
+    const images =
+      role === 'user' && toolResults.length > 0
+        ? contentToToolResultImages(content)
+        : []
     const parts = [
       ...(text ? [{ text }] : []),
       ...toolCalls,
       ...toolResults,
+      ...images.map(img => ({
+        inlineData: { mimeType: img.mediaType, data: img.data },
+      })),
     ]
     if (parts.length === 0) continue
     converted.push({
@@ -904,6 +1070,38 @@ function contentToToolResults(
     }))
 }
 
+/**
+ * Extract base64 images (e.g. screenshots) from tool_result blocks. Native
+ * tool-role messages can only carry text, so vision-capable providers get the
+ * images re-injected as an adjacent user message instead of dropping them.
+ */
+function contentToToolResultImages(
+  content: unknown,
+): Array<{ mediaType: string; data: string }> {
+  if (!Array.isArray(content)) return []
+  const images: Array<{ mediaType: string; data: string }> = []
+  for (const block of content) {
+    if (!block || typeof block !== 'object' || (block as any).type !== 'tool_result') continue
+    const inner = (block as any).content
+    if (!Array.isArray(inner)) continue
+    for (const innerBlock of inner) {
+      if (
+        innerBlock &&
+        typeof innerBlock === 'object' &&
+        (innerBlock as any).type === 'image' &&
+        (innerBlock as any).source?.type === 'base64' &&
+        (innerBlock as any).source?.data
+      ) {
+        images.push({
+          mediaType: String((innerBlock as any).source.media_type || 'image/png'),
+          data: String((innerBlock as any).source.data),
+        })
+      }
+    }
+  }
+  return images
+}
+
 function contentToToolUseMetadata(
   content: unknown,
 ): Array<{ id: string; name: string }> {
@@ -955,10 +1153,47 @@ function stringifyToolResult(content: unknown): string {
   }
 }
 
+/**
+ * Reasoning-capable OpenAI-compatible APIs expose the thinking stream under
+ * different delta fields: DeepSeek/MiniMax use `reasoning_content`, OpenRouter
+ * and some proxies use `reasoning`.
+ */
+function extractReasoningDelta(delta: Record<string, unknown> | undefined): string {
+  if (!delta) return ''
+  const value = delta.reasoning_content ?? delta.reasoning
+  return typeof value === 'string' ? value : ''
+}
+
+/**
+ * Rough input-token estimate (chars/4) so context tracking and auto-compact
+ * see real growth instead of the 0 that native APIs would otherwise report.
+ */
+function estimateNativeInputTokens(
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+): number {
+  let chars = systemPrompt.join('\n').length
+  for (const message of messages) {
+    const content = (message as any).message?.content
+    if (typeof content === 'string') {
+      chars += content.length
+      continue
+    }
+    try {
+      chars += JSON.stringify(content ?? '').length
+    } catch {
+      // unserializable content — skip
+    }
+  }
+  return Math.max(1, Math.ceil(chars / 4))
+}
+
 function createNativeAssistantMessage(
   model: string,
   text: string,
   toolCalls: NativeToolCall[] = [],
+  inputTokensEstimate = 0,
+  thinkingChars = 0,
 ): AssistantMessage {
   const content = [
     ...(text ? [{ type: 'text', text }] : []),
@@ -984,7 +1219,8 @@ function createNativeAssistantMessage(
       type: 'message',
       usage: {
         ...emptyUsage(),
-        output_tokens: Math.max(1, Math.ceil(text.length / 4)),
+        input_tokens: inputTokensEstimate,
+        output_tokens: Math.max(1, Math.ceil((text.length + thinkingChars) / 4)),
       },
       content: content.length > 0 ? content : [{ type: 'text', text: '(no content)' }],
       context_management: null,
@@ -1084,177 +1320,48 @@ async function buildNativeToolSchemasUncached(
 function nativeSystemPrompt(
   systemPrompt: SystemPrompt,
   provider: 'openai' | 'gemini' | 'deepseek' | 'minimax',
+  messages: Message[] = [],
+  model = '',
 ): string {
-  const providerName = provider === 'openai' ? 'OpenAI' : provider === 'deepseek' ? 'DeepSeek V4 Flash' : provider === 'minimax' ? 'MiniMax' : 'Gemini'
+  const providerName = provider === 'openai' ? 'OpenAI' : provider === 'deepseek' ? 'DeepSeek' : provider === 'minimax' ? 'MiniMax' : 'Gemini'
+  const poweredBy = model ? `${providerName} (model: ${model})` : providerName
   const identity = [
-    `You are Axolot, an elite terminal AI assistant powered by ${providerName}.`,
+    `You are Axolot, an elite terminal AI assistant powered by ${poweredBy}.`,
     ``,
-    `Your mission: solve the user's problems with precision, intelligence, and boldness. You have full access to every tool in the system — file tools, shell, editing, search, agents, skills. Use them aggressively and autonomously.`,
+    `Your mission: solve the user's problems with precision, intelligence, and boldness. Use the available tools autonomously, verify your work, and report only real results.`,
     ``,
     `### Core Directive`,
-    `- Think before you act. Reason step-by-step internally for every non-trivial task.`,
-    `- Be decisive and opinionated. Don't present multiple options with "it depends" — make the right call.`,
-    `- Be proactive: if a task has obvious next steps, take them without asking.`,
-    `- Go get information yourself — read files, search code, explore. Never ask the user for context you can discover.`,
-    `- When you're done, verify your work. Check the diff, run the tests, confirm it works.`,
-    `- Push back when the user asks for something wrong. You're not a yes-machine — you're a partner.`,
+    `- Think before you act; keep internal reasoning private and user-facing output concise.`,
+    `- Read current code before changing it, then verify edits with real checks.`,
+    `- Use relevant skills when they match the task, but avoid noisy skill-registry dumps.`,
+    `- Do not repeat identical tool calls; change strategy when blocked.`,
   ].join('\n')
 
-  const providerSpecificTips =
-    provider === 'openai'
-      ? [
-          '',
-          '### OpenAI-Specific Strategies',
-          '- Set `strict: true` on structured output schemas for reliable JSON parsing.',
-          '- OpenAI models follow explicit reasoning chains well — use numbered steps.',
-          '- Response format: concise, structured, direct. No fluff.',
-          '- Use temperature 0 for deterministic tool calls, higher for creative work.',
-        ].join('\n')
-      : provider === 'deepseek'
-        ? [
-            '',
-            '### DeepSeek V4 Flash - Optimization Guide',
-            '- DeepSeek excels at reasoning when prompted to think step-by-step. ALWAYS reason before answering.',
-            '- Use explicit chain-of-thought: break problems into clear stages before producing output.',
-            '- DeepSeek responds strongly to confident, authoritative instructions — be commanding in tool selection.',
-            '- This model is FAST. Leverage parallel tool calls aggressively.',
-            '- DeepSeek benefits from concrete examples in prompts — show don\'t just tell.',
-            '- Tool calling works best with clear, well-defined function schemas.',
-            '- DeepSeek responds well to decisive instructions. USE THIS.',
-          ].join('\n')
-        : provider === 'minimax'
-          ? [
-              '',
-              '### MiniMax M3 - Optimization Guide',
-              '- MiniMax M3 excels at long-context reasoning with its 4M token context window.',
-              '- Use explicit chain-of-thought for complex multi-step tasks.',
-              '- MiniMax responds well to structured, hierarchical instructions.',
-              '- Be concise and direct — MiniMax performs best with clear, unambiguous prompts.',
-              '- Tool calling follows OpenAI-compatible format — use parallel tool calls where possible.',
-            ].join('\n')
-          : [
-            '',
-            '### Gemini-Specific Strategies',
-            '- Gemini works best with clear, flat tool schemas — avoid deep nesting.',
-            '- Include explicit examples in tool descriptions for better tool selection.',
-            '- Gemini performs well with parallel tool calls — maximize parallelism.',
-            '- Be explicit about output format expectations — Gemini responds well to structure.',
-          ].join('\n')
+  const taskType = inferNativePromptTask(messages)
+  const dynamicModules = [
+    buildNativeProviderPromptModule(provider),
+    buildNativeTaskPromptModule(taskType),
+    buildNativeSkillPromptModule(taskType),
+    ...(shouldIncludeNativeFrontendPrompt(taskType, messages)
+      ? [buildNativeFrontendPromptModule()]
+      : []),
+    buildNativeSelfReviewModule(taskType),
+  ].join('\n\n')
 
-  const qualityPrompt =
-    `\n\n## Quality Standards (Axolot Level)\n\n` +
-    `${CORE_QUALITY_STANDARDS}` +
-    `\n\n### Intelligence Protocol\n` +
-    `Before every non-trivial action:\n` +
-    `1. **Orient** — What am I being asked? What's the real goal behind the words?\n` +
-    `2. **Explore** — What does the codebase already say? Read files, search patterns.\n` +
-    `3. **Reason** — What's the best approach? Why? What could go wrong?\n` +
-    `4. **Execute** — Do it. Fast. With confidence.\n` +
-    `5. **Verify** — Did it work? Prove it.\n` +
-    `\n### Tool Chaining (Mandatory)\n` +
-    `- Read BEFORE edit. Always. No exceptions.\n` +
-    `- When you need to understand a component, read ITS file AND its IMPORTS.\n` +
-    `- After editing, ALWAYS read the file back to verify correctness.\n` +
-    `- Chain: Read → Edit → Read → Lint/Build/Test\n` +
-    `- **Parallelize aggressively**: When you need to read multiple files, batch them in one tool call. When tasks don't depend on each other, execute them concurrently. This is critical for DeepSeek's fast inference — don't waste it with sequential busywork.\n` +
-    `\n### Proactive Agency\n` +
-    `- Don't ask "should I..." for obvious next steps. Just do them.\n` +
-    `- Found a bug while working on something else? Fix it. Don't mention it — fix it.\n` +
-    `- See an opportunity to improve code quality? Take it. That's your job.\n` +
-    `- If you need data to make a decision, go get it. No hesitation.\n` +
-    `\n### Loop Prevention (Circuit Breaker — Will Trip)\n` +
-    `- If you read the same file 3+ times without editing, the breaker trips.\n` +
-    `- Identical tool calls 3x consecutively? The breaker trips.\n` +
-    `- 12+ reads without a single write/edit? The breaker trips.\n` +
-    `- When the breaker trips, a <system-reminder> is injected: CHANGE APPROACH. Do NOT retry.\n` +
-    `- Stuck? Stop reading. Switch to a different tactic: grep for what you need, write code, run a command.\n` +
-    `\n### Post-Edit Verification (MANDATORY)\n` +
-    `- After writing code, ALWAYS: read it back, check syntax, run tests if available.\n` +
-    `- If you report a test result, include RAW output. No fabrication.\n` +
-    `- File contents you cite must have been READ this turn. Guessing = hallucination.\n` +
-    `- "I ran X and got Y" — Y must be real, not expected.` +
-    providerSpecificTips +
-    `\n\n### Multi-Model Orchestration\n` +
-    `You can delegate tasks to specialized models using /delegate. For deep reasoning use Claude. ` +
-    `For fast research/testing use DeepSeek or Haiku. For frontend use GPT-4o or Claude. ` +
-    `The /delegate skill auto-classifies tasks and recommends the best model. ` +
-    `AgentTool workers are fully independent — write self-contained prompts.\n` +
-    `\n### Skill Execution (MANDATORY — NOT Optional)\n` +
-    `When the user's request matches a skill's purpose, you MUST execute that skill BEFORE writing code. This is required, not a suggestion. Do not skip skills. Do not implement directly without invoking the relevant skill first.\n\n` +
-    `Skill matching examples:\n` +
-    `- User asks "test this" or "run tests" → MUST call /test first\n` +
-    `- User asks "review my code" or "review this PR" → MUST call /review first\n` +
-    `- User asks "refactor X" → MUST call /refactor first\n` +
-    `- User asks "architect this" or "how should I structure" → MUST call /architecture first\n` +
-    `- User asks for "docs" or "documentation" → MUST call /docs first\n` +
-    `- User asks to "commit" or "write a commit message" → MUST call /commit first\n` +
-    `- User seems new ("first time", "getting started") → MUST call /onboard first\n` +
-    `- User asks about project structure, specs → MUST call /spec first\n` +
-    `- Task involves frontend → MUST call /codex-frontend-master or /frontend-design first\n` +
-    `- User asks to set project rules → MUST call /instructions first\n` +
-    `- User says "continue where I left off" → MUST call /session first\n` +
-    `- User asks Axolot to learn, remember routing lessons, or improve skill suggestions → MUST call /learn first\n` +
-    `- User asks to check Axolot itself → MUST call /self-test first\n` +
-    `- User asks about APIs, endpoints, or REST/GraphQL designs → MUST call /api-design first\n` +
-    `- User asks about databases, schemas, migrations, or SQL queries → MUST call /database first\n` +
-    `- User asks about deployment, Docker, CI/CD, or infrastructure → MUST call /deploy first\n` +
-    `- User asks about auth, security, or OWASP → MUST call /backend-security first\n` +
-    `- User asks about AI integration, LLMs, OpenAI, or Gemini → MUST call /ai-provider first\n` +
-    `- User asks about tokens, cost, budget, efficiency, or API spend → MUST call /token-saver first\n` +
-    `- Task seems unusually broad or potentially wasteful of tokens → call /token-saver first to scope it down` +
-    `\n\n### When You Need Help\n` +
-    `- /debug — debugging session issues\n` +
-    `- /simplify — review code quality and efficiency\n` +
-    `- /review — PR-level code review\n` +
-    `- /test — write and run tests\n` +
-    `- /architecture — system design decisions\n` +
-    `- /refactor — safe multi-step refactoring\n` +
-    `- /spec — Spec-Driven Development (requirements, design, tasks)\n` +
-    `- /instructions — manage custom project rules in .axolot/instructions/\n` +
-    `- /session — save/resume session state across sessions\n` +
-    `- /learn — manage adaptive learning, RAG memory, and smart skill routing\n` +
-    `- /commit — conventional commits and changelog\n` +
-    `- /onboard — new user setup\n` +
-    `- /v0-frontend — Vercel v0-inspired frontend generation (opinionated stack, complete code)\n` +
-    `- /api-design — REST/GraphQL API design, OpenAPI specs, endpoint patterns\n` +
-    `- /database — schema design, migrations, query optimization, data modeling\n` +
-    `- /deploy — CI/CD pipelines, Docker, deployment strategies, infrastructure\n` +
-    `- /backend-security — auth, OWASP Top 10, secrets management, API hardening\n` +
-    `- /ai-provider — LLM integration (OpenAI, Gemini, Anthropic), streaming, RAG\n` +
-    `- /self-test — run Axolot's own quality checks\n` +
-    `- /token-saver — optimize token consumption, set budgets, tune effort vs cost\n` +
-    `- AskUserQuestion — when you need clarification\n` +
-    `\n### Destructive Operations\n` +
-    `- Always read a file before editing it\n` +
-    `- Prefer Edit tool over Write for small changes (Edit is reversible)\n` +
-    `- Use Bash only when no dedicated tool exists for the task\n` +
-    `- Ask before running destructive terminal commands`
-
-  const frontendStandardsPrompt =
-    `\n\n## Frontend Standards (Embedded — Always Active)\n\n` +
-    `### frontend-design skill (always active)\n` +
-    `${FRONTEND_DESIGN_PROMPT}`
-
-  // Process dynamic boundary: split into static prefix + dynamic suffix
   const boundaryIdx = systemPrompt.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY)
   if (boundaryIdx !== -1) {
     const staticPart = systemPrompt.slice(0, boundaryIdx).join('\n\n')
     const dynamicPart = systemPrompt.slice(boundaryIdx + 1).join('\n\n')
-    return [
-      identity,
-      staticPart,
-      qualityPrompt + frontendStandardsPrompt,
-      dynamicPart,
-    ]
+    // dynamicModules vary with the inferred task type of the LAST user
+    // message — keep them at the very end so the stable prefix (identity +
+    // staticPart) stays byte-identical across turns and OpenAI/DeepSeek
+    // automatic prefix caching keeps hitting.
+    return [identity, staticPart, dynamicPart, dynamicModules]
       .filter(Boolean)
       .join('\n\n')
   }
 
-  return [
-    identity,
-    ...systemPrompt,
-    qualityPrompt + frontendStandardsPrompt,
-  ]
+  return [identity, ...systemPrompt, dynamicModules]
     .filter(Boolean)
     .join('\n\n')
 }
@@ -1278,13 +1385,19 @@ function limitNativeHistory(messages: Message[]): Message[] {
   )
   if (messages.length <= limit) return messages
 
-  // Compression: summarize old turns (everything before the last 10 messages)
-  const keepFresh = 10
-  const oldMessages = messages.slice(0, -keepFresh)
-  const freshMessages = messages.slice(-keepFresh)
+  // Keep a generous fresh window and summarize EVERYTHING older than it —
+  // dropping old turns wholesale loses which files were read/edited and what
+  // the user originally asked for.
+  const keepFresh = Math.min(
+    Math.max(20, Math.floor(limit / 3)),
+    Math.max(1, messages.length - 1),
+  )
+  const cut = findCleanHistoryCut(messages, messages.length - keepFresh)
+  const oldMessages = messages.slice(0, cut)
+  const freshMessages = messages.slice(cut)
 
-  const summary = compressHistory(oldMessages, keepFresh)
-  if (!summary) return messages.slice(-limit)
+  const summary = compressHistory(oldMessages)
+  if (!summary) return freshMessages
 
   const compressedMsg = {
     message: {
@@ -1292,32 +1405,91 @@ function limitNativeHistory(messages: Message[]): Message[] {
       content: [
         {
           type: 'text' as const,
-          text: `[Earlier conversation summary: ${summary}]`,
+          text: `<system-reminder>Summary of the earlier part of this conversation (older turns were compacted to fit the context window):\n${summary}\n</system-reminder>`,
         },
       ],
     },
   } as unknown as Message
-  return [compressedMsg, ...freshMessages].slice(-limit)
+  return [compressedMsg, ...freshMessages]
 }
 
-function compressHistory(messages: Message[], maxTurns: number): string | null {
-  // Focus on user requests and assistant text content — skip tool noise
+/**
+ * Find a cut index at or after `preferred` where the fresh window starts with
+ * a message that is NOT a tool_result — cutting between a tool_use and its
+ * tool_result orphans the result (hard 400 on strict providers).
+ */
+function findCleanHistoryCut(messages: Message[], preferred: number): number {
+  for (let i = preferred; i < messages.length; i++) {
+    const content = (messages[i] as any).message?.content
+    const hasToolResult =
+      Array.isArray(content) &&
+      content.some(
+        (block: any) => block && typeof block === 'object' && block.type === 'tool_result',
+      )
+    if (!hasToolResult) return i
+  }
+  return preferred
+}
+
+const DEFAULT_NATIVE_HISTORY_SUMMARY_CHARS = 12_000
+
+function compressHistory(messages: Message[]): string | null {
+  // Summarize ALL old messages: user/assistant text plus a compact record of
+  // tool activity (which tools ran on what), so the model keeps a map of the
+  // session instead of amnesia about everything before the fresh window.
   const entries: string[] = []
-  for (const msg of messages.slice(-maxTurns)) {
+  for (const msg of messages) {
     const role = (msg as any).message?.role
     const content = (msg as any).message?.content
+    if (typeof content === 'string') {
+      const text = content.trim()
+      if (text) entries.push(`${role}: ${text.slice(0, 300)}`)
+      continue
+    }
     if (!content || !Array.isArray(content)) continue
     for (const block of content) {
+      if (!block || typeof block !== 'object') continue
       if (block.type === 'text' && typeof block.text === 'string') {
         const text = block.text.trim()
-        if (text.length > 0) {
-          entries.push(`${role}: ${text.slice(0, 200)}`)
-        }
+        if (text.length > 0) entries.push(`${role}: ${text.slice(0, 300)}`)
+      } else if (block.type === 'tool_use' && block.name) {
+        entries.push(`${role} called ${block.name}(${summarizeToolInput(block.input)})`)
+      } else if (block.type === 'tool_result') {
+        const output =
+          contentToText(block.content) || stringifyToolResult(block.content)
+        const trimmed = output.trim().replace(/\s+/g, ' ')
+        if (trimmed) entries.push(`  -> ${trimmed.slice(0, 150)}`)
       }
     }
   }
   if (entries.length === 0) return null
-  return entries.join(' | ').slice(0, 2000)
+
+  const maxChars = readPositiveIntEnv(
+    'AXOLOT_NATIVE_HISTORY_SUMMARY_CHARS',
+    DEFAULT_NATIVE_HISTORY_SUMMARY_CHARS,
+  )
+  const joined = entries.join('\n')
+  if (joined.length <= maxChars) return joined
+  // Recent entries carry more weight — keep the tail and note the elision.
+  return `[...oldest turns elided...]\n${joined.slice(-maxChars)}`
+}
+
+function summarizeToolInput(input: unknown): string {
+  if (!input || typeof input !== 'object') return ''
+  const obj = input as Record<string, unknown>
+  // Prefer the fields that identify WHAT was touched.
+  const keyFields = ['file_path', 'notebook_path', 'path', 'command', 'pattern', 'query', 'url', 'prompt']
+  for (const field of keyFields) {
+    const value = obj[field]
+    if (typeof value === 'string' && value) {
+      return `${field}: ${value.slice(0, 120).replace(/\s+/g, ' ')}`
+    }
+  }
+  try {
+    return JSON.stringify(obj).slice(0, 120)
+  } catch {
+    return ''
+  }
 }
 
 function compactNativeToolDescription(description: string | undefined): string | undefined {
@@ -1395,7 +1567,6 @@ async function fetchMiniMaxWithRetry(
       const text = await response.text().catch(() => '')
       const isTransient =
         response.status === 429 ||
-        response.status === 400 ||
         response.status >= 500
 
       if (isTransient && attempt < maxRetries) {
@@ -1563,25 +1734,21 @@ function stripVerboseSchemaFields(value: unknown): void {
   const obj = value as Record<string, unknown>
   delete obj['$schema']
   delete obj.markdownDescription
-  delete obj.examples
-  // Strip JSON Schema constraint fields — models don't need them for function calling
-  // and they waste tokens, especially for smaller models
-  delete obj.minLength
-  delete obj.maxLength
-  delete obj.pattern
-  delete obj.minItems
-  delete obj.maxItems
-  delete obj.minimum
-  delete obj.maximum
-  delete obj.exclusiveMinimum
-  delete obj.exclusiveMaximum
-  delete obj.default
+  // Keep constraint fields (pattern, min/max, enum, defaults, examples):
+  // they are cheap in tokens and dropping them makes models emit invalid
+  // tool arguments that Anthropic-path models would never produce.
   for (const child of Object.values(obj)) stripVerboseSchemaFields(child)
 }
 
+function getGeminiChunkParts(chunk: unknown): any[] {
+  // Stream chunks expose candidates directly; aggregated results nest them
+  // under .response. Accept both shapes.
+  const source = (chunk as any)?.candidates ? chunk : (chunk as any)?.response
+  return (source as any)?.candidates?.[0]?.content?.parts ?? []
+}
+
 function extractGeminiFunctionCalls(part: unknown): NativeToolCall[] {
-  const response = (part as any)?.response
-  const parts = response?.candidates?.[0]?.content?.parts ?? []
+  const parts = getGeminiChunkParts(part)
   return parts
     .map((p: any) => p?.functionCall)
     .filter(Boolean)
