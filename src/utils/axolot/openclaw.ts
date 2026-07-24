@@ -180,8 +180,8 @@ export function listOpenClawModels(): OpenClawModel[] {
       directModel('gemini', 'gemini-1.5-flash', 'Gemini'),
       directModel('deepseek', 'deepseek-v4-flash', 'DeepSeek V4 Flash'),
       directModel('minimax', 'MiniMax-M3', 'MiniMax M3'),
-      directModel('glm', 'z-ai/glm-4.6', 'GLM 4.6 (NVIDIA)'),
-      directModel('kimi', 'moonshotai/kimi-k2-instruct', 'Kimi K2 (NVIDIA)'),
+      directModel('glm', 'z-ai/glm-5.2', 'GLM 5.2 (NVIDIA)'),
+      directModel('kimi', 'moonshotai/kimi-k2.6', 'Kimi K2.6 (NVIDIA)'),
     ]
 
     const openaiCredType = directStore.get('credentialType.openai') as string
@@ -321,8 +321,8 @@ function defaultDirectModel(provider: string): string {
   if (provider === 'gemini') return 'gemini-2.5-pro'
   if (provider === 'deepseek') return 'deepseek-v4-flash'
   if (provider === 'minimax') return 'MiniMax-M3'
-  if (provider === 'glm') return 'z-ai/glm-4.6'
-  if (provider === 'kimi') return 'moonshotai/kimi-k2-instruct'
+  if (provider === 'glm') return 'z-ai/glm-5.2'
+  if (provider === 'kimi') return 'moonshotai/kimi-k2.6'
   return 'claude-3-5-sonnet-latest'
 }
 

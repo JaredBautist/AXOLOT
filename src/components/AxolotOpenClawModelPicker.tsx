@@ -37,6 +37,18 @@ const PROVIDER_BACK = '__AXOLOT_PROVIDER_BACK__'
 const PROVIDER_LOGIN_OAUTH = '__AXOLOT_LOGIN_OAUTH__'
 const PROVIDER_LOGOUT = '__AXOLOT_LOGOUT__'
 const PROVIDER_BASE_URL = '__AXOLOT_PROVIDER_BASE_URL__'
+const PROVIDER_ALL_MODELS = '__AXOLOT_ALL_MODELS__'
+const PROVIDER_FILTER_MODELS = '__AXOLOT_FILTER_MODELS__'
+
+// A shared endpoint (NVIDIA NIM) returns one 100+ model catalog for every
+// provider. Each provider should list only its own family; the full catalog
+// lives behind the "your favorite model" option. Keywords are matched
+// case-insensitively against the model id (which includes the org prefix).
+const PROVIDER_MODEL_KEYWORDS: Record<string, string[]> = {
+  deepseek: ['deepseek'],
+  glm: ['glm', 'z-ai', 'zai', 'zhipu'],
+  kimi: ['kimi', 'moonshot'],
+}
 
 const AUTH_URLS: Record<string, { login: string; label: string }> = {
   openai: {
@@ -108,15 +120,15 @@ const providerOptions = [
   {
     id: 'glm',
     label: 'GLM (Zhipu)',
-    description: 'GLM via NVIDIA NIM, e.g. z-ai/glm-4.6. Uses your NVIDIA key.',
-    placeholder: 'z-ai/glm-4.6',
+    description: 'GLM via NVIDIA NIM, e.g. z-ai/glm-5.2. Uses your NVIDIA key.',
+    placeholder: 'z-ai/glm-5.2',
     hasOAuth: false,
   },
   {
     id: 'kimi',
     label: 'Kimi (Moonshot)',
-    description: 'Kimi via NVIDIA NIM, e.g. moonshotai/kimi-k2-instruct. Uses your NVIDIA key.',
-    placeholder: 'moonshotai/kimi-k2-instruct',
+    description: 'Kimi via NVIDIA NIM, e.g. moonshotai/kimi-k2.6. Uses your NVIDIA key.',
+    placeholder: 'moonshotai/kimi-k2.6',
     hasOAuth: false,
   },
 ] as const
@@ -172,10 +184,19 @@ export function AxolotOpenClawModelPicker({
     baseUrl: string
     ids: string[]
   } | null>(null)
+  // When true, the model list shows the endpoint's full catalog instead of just
+  // the current provider's family ("your favorite model"). Reset per provider.
+  const [browseAll, setBrowseAll] = React.useState(false)
 
   const activeModel = getOpenClawPrimaryModel()
   const allModels = listOpenClawModels()
   const current = page.name === 'providers' ? null : page.provider
+
+  // Reset the "browse all" toggle whenever the selected provider changes, so
+  // each provider opens on its own filtered family, not the full catalog.
+  React.useEffect(() => {
+    setBrowseAll(false)
+  }, [current?.id])
 
   // OAuth PKCE flow — runs when entering oauth-waiting page
   React.useEffect(() => {
@@ -927,7 +948,7 @@ export function AxolotOpenClawModelPicker({
   // ===== PAGE: SELECT MODEL =====
   if (page.name === 'select-model' && current) {
     const customBaseUrl = getBaseUrl(current.id)
-    const endpointModels =
+    const fullCatalog =
       customBaseUrl &&
       remoteModels &&
       remoteModels.providerId === current.id &&
@@ -938,6 +959,30 @@ export function AxolotOpenClawModelPicker({
     const endpointHost = customBaseUrl
       ? customBaseUrl.replace(/^https?:\/\//, '').split('/')[0]
       : ''
+
+    // A shared endpoint (NVIDIA NIM) hands back one 100+ model catalog for every
+    // provider. Filter it to just this provider's family, then sort newest-first
+    // (numeric-aware) so the latest version — e.g. glm-5.2 over glm-4.6 — is the
+    // top pick. "Browse all" reveals the untouched catalog.
+    const keywords = PROVIDER_MODEL_KEYWORDS[current.id] || [current.id]
+    const familyModels = fullCatalog
+      ? fullCatalog.filter(id => {
+          const lower = id.toLowerCase()
+          return keywords.some(k => lower.includes(k))
+        })
+      : null
+    const hasExtraModels = Boolean(
+      fullCatalog && familyModels && fullCatalog.length > familyModels.length,
+    )
+    // Default to the filtered family; if the filter matched nothing (unfamiliar
+    // naming), fall back to the full catalog so the user is never stranded.
+    const endpointModels = fullCatalog
+      ? browseAll || !familyModels || familyModels.length === 0
+        ? fullCatalog
+        : [...familyModels].sort((a, b) =>
+            b.localeCompare(a, undefined, { numeric: true }),
+          )
+      : null
     const options: OptionWithDescription<string>[] = [
       // Custom endpoint: its real catalog replaces the built-in presets,
       // which most likely don't exist there.
@@ -980,6 +1025,24 @@ export function AxolotOpenClawModelPicker({
             } as OptionWithDescription<string>,
           ]
         : []),
+      // "Your favorite model": reveal the endpoint's full catalog (or fold back
+      // to just this provider's family). Only shown when the endpoint actually
+      // hosts more models than this provider's family.
+      ...(hasExtraModels
+        ? [
+            browseAll
+              ? ({
+                  value: PROVIDER_FILTER_MODELS,
+                  label: `Show only ${current.label} models`,
+                  description: `Back to the ${current.label} family.`,
+                } as OptionWithDescription<string>)
+              : ({
+                  value: PROVIDER_ALL_MODELS,
+                  label: '⭐ Your favorite model (browse all)',
+                  description: `See every model on ${endpointHost} (${fullCatalog?.length ?? 0}).`,
+                } as OptionWithDescription<string>),
+          ]
+        : []),
       {
         value: PROVIDER_MODEL,
         label: 'Enter model name manually',
@@ -1014,7 +1077,11 @@ export function AxolotOpenClawModelPicker({
             )}
             {endpointModels && (
               <Text dimColor>
-                Showing {endpointModels.length} models from {endpointHost}.
+                {browseAll
+                  ? `Showing all ${endpointModels.length} models from ${endpointHost}.`
+                  : `Showing ${endpointModels.length} ${current.label} model${
+                      endpointModels.length === 1 ? '' : 's'
+                    } from ${endpointHost}.`}
               </Text>
             )}
           </Box>
@@ -1033,6 +1100,10 @@ export function AxolotOpenClawModelPicker({
                 setPage({ name: 'enter-base-url', provider: current })
               } else if (value === PROVIDER_BACK) {
                 setPage({ name: 'providers' })
+              } else if (value === PROVIDER_ALL_MODELS) {
+                setBrowseAll(true)
+              } else if (value === PROVIDER_FILTER_MODELS) {
+                setBrowseAll(false)
               } else {
                 setModel(value)
               }

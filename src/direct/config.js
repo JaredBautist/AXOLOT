@@ -14,8 +14,8 @@ const DEFAULT_MODELS = Object.freeze({
   gemini: 'gemini-2.5-pro',
   deepseek: 'deepseek-v4-flash',
   minimax: 'MiniMax-M3',
-  glm: 'z-ai/glm-4.6',
-  kimi: 'moonshotai/kimi-k2-instruct',
+  glm: 'z-ai/glm-5.2',
+  kimi: 'moonshotai/kimi-k2.6',
 })
 
 const store = new Conf({
