@@ -235,16 +235,14 @@ function getSimpleDoingTasksSection(): string {
     `Do not create files unless they're absolutely necessary for achieving your goal. Generally prefer editing an existing file to creating a new one, as this prevents file bloat and builds on existing work more effectively.`,
     `Avoid giving time estimates or predictions for how long tasks will take, whether for your own work or for users planning projects. Focus on what needs to be done, not how long it might take.`,
     `If an approach fails, diagnose why before switching tactics—read the error, check your assumptions, try a focused fix. Don't retry the identical action blindly, but don't abandon a viable approach after a single failure either. Escalate to the user with ${ASK_USER_QUESTION_TOOL_NAME} only when you're genuinely stuck after investigation, not as a first response to friction.`,
-    `Error Recovery Protocol (MANDATORY): When a tool call fails, follow this process:\n1. Read the error message carefully — identify the actual cause\n2. Try a FIXED version (different params, not identical retry)\n3. If still failing, try an ALTERNATIVE approach (different tool, different method)\n4. If all approaches fail, escalate to the user with the error, what you tried, and what you recommend\nNEVER retry the exact same failing call more than once. NEVER silently give up.`,
+    `Error recovery: when a tool call fails, read the error and identify the actual cause, then retry a fixed version (different params, not an identical retry) or switch to an alternative approach. Never repeat the exact same failing call more than once, and never silently give up — if genuinely stuck after investigating, escalate to the user with the error, what you tried, and what you recommend.`,
     `Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it. Prioritize writing safe, secure, and correct code.`,
-    `Intellectual Honesty (MANDATORY): Never fabricate test results, file contents, API responses, command output, or error messages. If you didn't read it, you don't know it. If you didn't run it, you don't know the result. Distinguish between what you read vs. what you infer. "I don't know" is better than confidently wrong. When reporting outcomes, accuracy is non-negotiable — show real output, not what you expected.`,
+    `Honesty and verification: never fabricate test results, file contents, API responses, command output, or error messages — if you didn't read it or run it, you don't know it. After editing a file, verify with real checks (read-back, lint/typecheck, tests) before claiming completion; if you can't verify, say so explicitly. Report outcomes faithfully: show failing output when checks fail, say when a step was skipped, never characterize incomplete work as done, and state confirmed results plainly without hedging.`,
     `Bold Execution: Be audacious. You're an expert engineer, not a suggestion bot. Make decisions, execute them, verify them. When you're 80% sure, just do it — don't present multiple options unless tradeoffs are genuinely significant. When something is wrong, push back. When you see a better path, take it. Own the outcome.`,
     `Spec-Driven Development: Before implementing non-trivial work, check if .axolot/SPEC.md exists and read it for requirements, design, and task definitions. If it doesn't exist, offer to run /spec init or create a lightweight spec. Keep the spec in sync with actual implementation — update requirements as you discover them, mark tasks done as you complete them, log session summaries to .axolot/memory/.`,
     ...codeStyleSubitems,
     `Avoid backwards-compatibility hacks like renaming unused _vars, re-exporting types, adding // removed comments for removed code, etc. If you are certain that something is unused, you can delete it completely.`,
-    `Report outcomes faithfully (MANDATORY): If tests fail, show the failure output. If you didn't run a verification step, say so — don't imply it passed. Never claim "all tests pass" when output shows failures. Never suppress, simplify, or fabricate failing checks to manufacture a green result. Never characterize incomplete or broken work as done. When a check passes or a task is complete, state it plainly — don't hedge confirmed results. The goal is an accurate report, not a defensive one.`,
-    `Loop Prevention (MANDATORY): The system monitors tool calls for loops via a circuit breaker. It trips when you repeat the same action 3+ times or read excessively without writing. If you feel stuck, step back and change strategy — don't retry the identical action. Reading the same file repeatedly yields no new information. Before re-reading, ask: "What SPECIFIC new information am I looking for?" If you can't answer, don't re-read.`,
-    `Post-Write Verification (MANDATORY): After ANY file edit or write, you MUST verify: read the file back, run lint/typecheck if available, confirm the output. Do not mark a task complete without verification. If you can't verify, say so explicitly.`,
+    `Loop prevention: a circuit breaker monitors tool calls and trips when you repeat the same action or read excessively without writing. Re-reading the same file yields no new information — before re-reading, ask what specific new information you're looking for; if you can't answer, change strategy instead.`,
     ...(process.env.USER_TYPE === 'ant'
       ? [
           `If the user reports a bug, slowness, or unexpected behavior with Axolot itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with Axolot.`,
@@ -405,6 +403,43 @@ function getSessionSpecificGuidanceSection(
 }
 
 // @[MODEL LAUNCH]: Remove this section when we launch numbat.
+let cachedProjectLooksFrontend: boolean | null = null
+
+/**
+ * Stable per-session heuristic: does the current project use a frontend
+ * framework? Used to gate the always-on v0 frontend prompt so backend/CLI
+ * sessions don't carry ~1K tokens of Next.js/Tailwind guidance every turn.
+ */
+function projectLooksFrontend(): boolean {
+  if (cachedProjectLooksFrontend !== null) return cachedProjectLooksFrontend
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(getCwd(), 'package.json'), 'utf-8'),
+    )
+    const deps = {
+      ...(pkg.dependencies ?? {}),
+      ...(pkg.devDependencies ?? {}),
+    }
+    const frontendDeps = [
+      'react',
+      'react-dom',
+      'next',
+      'vue',
+      'nuxt',
+      'svelte',
+      '@sveltejs/kit',
+      'astro',
+      '@angular/core',
+      'solid-js',
+      'tailwindcss',
+    ]
+    cachedProjectLooksFrontend = frontendDeps.some(dep => dep in deps)
+  } catch {
+    cachedProjectLooksFrontend = false
+  }
+  return cachedProjectLooksFrontend
+}
+
 function getOutputEfficiencySection(): string {
   if (process.env.USER_TYPE === 'ant') {
     return `# Communicating with the user
@@ -423,6 +458,8 @@ These user-facing text instructions do not apply to code or tool calls.`
 IMPORTANT: Go straight to the point. Try the simplest approach first without going in circles. Do not overdo it. Be extra concise.
 
 Keep your text output brief and direct. Lead with the answer or action, not the reasoning. Skip filler words, preamble, and unnecessary transitions. Do not restate what the user said — just do it. When explaining, include only what is necessary for the user to understand.
+
+Match the response shape to the question: a simple question gets a direct answer in prose, not headers and numbered sections. Use tables only for short enumerable facts (file names, line numbers, pass/fail) or quantitative data — put explanatory reasoning in the surrounding prose, not in table cells. Write in complete sentences; being readable matters more than being terse, so if brevity would force the user to re-read or ask a follow-up, prefer the clearer version.
 
 Focus text output on:
 - Decisions that need the user's input
@@ -562,12 +599,24 @@ ${CYBER_RISK_INSTRUCTION}`,
     systemPromptSection('project_instructions', () => {
       const instrDir = join(getCwd(), '.axolot', 'instructions')
       try {
-        const files = readdirSync(instrDir).filter(f => f.endsWith('.md'))
-        if (files.length === 0) return null
+        const allFiles = readdirSync(instrDir)
+          .filter(f => f.endsWith('.md'))
+          .sort()
+        if (allFiles.length === 0) return null
+        // Hard cap: without it, N instruction files inject N×2000 chars of
+        // system prompt every turn with no ceiling.
+        const maxFiles = 10
+        const files = allFiles.slice(0, maxFiles)
         const parts = files.map(f => {
           const content = readFileSync(join(instrDir, f), 'utf-8')
           return `### ${f.replace(/\.md$/, '')}\n${content.trim().slice(0, 2000)}`
         })
+        const omitted = allFiles.length - files.length
+        if (omitted > 0) {
+          parts.push(
+            `(${omitted} more instruction file(s) omitted to bound context: ${allFiles.slice(maxFiles).join(', ')} — read them from .axolot/instructions/ if relevant.)`,
+          )
+        }
         return `## Project Instructions\n\n${parts.join('\n\n')}`
       } catch {
         return null
@@ -591,7 +640,14 @@ ${CYBER_RISK_INSTRUCTION}`,
     systemPromptSection('learning_profile', () =>
       buildLearningSystemSection(getCwd()),
     ),
-    systemPromptSection('v0_frontend', () => V0_FRONTEND_PROMPT),
+    // Only inject the v0-style frontend prompt (~1K tokens) when the project
+    // actually looks like a frontend codebase — backend/data/CLI sessions
+    // shouldn't pay for Next.js/Tailwind/shadcn guidance every turn. Gated on
+    // project profile (stable per session) rather than per-message intent so
+    // the section stays prompt-cache friendly.
+    systemPromptSection('v0_frontend', () =>
+      projectLooksFrontend() ? V0_FRONTEND_PROMPT : null,
+    ),
     // Numeric length anchors — research shows ~1.2% output token reduction vs
     // qualitative "be concise".
     systemPromptSection(
@@ -738,6 +794,15 @@ export async function computeSimpleEnvInfo(
   const cwd = getCwd()
   const isWorktree = getCurrentWorktreeSession() !== null
 
+  // Native multi-provider sessions (openai/gemini/deepseek/minimax) must not
+  // receive Claude-specific guidance ("default to Claude models", /fast) — it
+  // contradicts the provider identity injected by nativeSystemPrompt.
+  const isNativeModel =
+    /^(openai|gemini|google|deepseek|minimax)\//i.test(modelId) ||
+    ['openai', 'gemini', 'deepseek', 'minimax'].includes(
+      process.env.AXOLOT_NATIVE_PROVIDER?.toLowerCase() ?? '',
+    )
+
   const envItems = [
     `Primary working directory: ${cwd}`,
     isWorktree
@@ -755,13 +820,13 @@ export async function computeSimpleEnvInfo(
     `OS Version: ${unameSR}`,
     modelDescription,
     knowledgeCutoffMessage,
-    process.env.USER_TYPE === 'ant' && isUndercover()
+    (process.env.USER_TYPE === 'ant' && isUndercover()) || isNativeModel
       ? null
       : `The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.opus}', Sonnet 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.sonnet}', Haiku 4.5: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.haiku}'. When building AI applications, default to the latest and most capable Claude models.`,
     process.env.USER_TYPE === 'ant' && isUndercover()
       ? null
       : `Axolot is available as a CLI in the terminal.`,
-    process.env.USER_TYPE === 'ant' && isUndercover()
+    (process.env.USER_TYPE === 'ant' && isUndercover()) || isNativeModel
       ? null
       : `Fast mode for Axolot uses the same ${FRONTIER_MODEL_NAME} model with faster output. It does NOT switch to a different model. It can be toggled with /fast.`,
   ].filter(item => item !== null)

@@ -2,7 +2,7 @@ import type { TaskType } from '../orchestration/modelRegistry.js'
 import { classifyTaskType } from '../orchestration/taskRouter.js'
 import type { Message } from '../../types/message.js'
 
-export type NativePromptProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax'
+export type NativePromptProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi'
 
 export function inferNativePromptTask(messages: Message[]): TaskType {
   const lastUserText = getLastUserText(messages)
@@ -98,6 +98,14 @@ export function buildNativeProviderPromptModule(provider: NativePromptProvider):
     minimax: [
       'Use the long context carefully: preserve tool-call/tool-result pairing and avoid noisy recaps.',
       'Be concise and structured; prefer clean state summaries over verbose transcripts.',
+    ],
+    glm: [
+      'Follow tool schemas exactly and keep tool arguments minimal and valid JSON.',
+      'Reason step-by-step internally, but keep user-facing output concise and evidence-backed.',
+    ],
+    kimi: [
+      'Leverage the long context without noisy recaps; preserve tool-call/tool-result pairing.',
+      'Prefer decisive, structured answers over verbose exploration.',
     ],
   }
 

@@ -39,7 +39,11 @@ const nativeToolSchemaCache = new Map<
   Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }>
 >()
 
-type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax'
+type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi'
+
+// GLM (Zhipu) and Kimi (Moonshot) default to NVIDIA NIM's universal, OpenAI-
+// compatible endpoint — one nvapi- key unlocks many models.
+const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
 type NativeRoute = {
   provider: NativeProvider
@@ -83,8 +87,19 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: 'minimax', model: raw.slice('minimax/'.length) }
   }
 
+  if (lower.startsWith('glm/')) {
+    return { provider: 'glm', model: raw.slice('glm/'.length) }
+  }
+
+  if (lower.startsWith('kimi/')) {
+    return { provider: 'kimi', model: raw.slice('kimi/'.length) }
+  }
+
   const envProvider = process.env.AXOLOT_NATIVE_PROVIDER?.toLowerCase()
-  if (envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' || envProvider === 'minimax') {
+  if (
+    envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' ||
+    envProvider === 'minimax' || envProvider === 'glm' || envProvider === 'kimi'
+  ) {
     return { provider: envProvider, model: raw }
   }
 
@@ -226,6 +241,11 @@ export async function* queryNativeProvider({
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
+    } else if (route.provider === 'glm' || route.provider === 'kimi') {
+      for await (const event of streamNvidiaHosted(route.provider, route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
+      }
     } else {
       for await (const event of streamGemini(route.model, nativeMessages, systemPrompt, signal, nativeTools.gemini, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
@@ -262,12 +282,32 @@ export async function* queryNativeProvider({
   } catch (error) {
     if (signal.aborted) return
     const classified = classifyNativeError(error instanceof Error ? error : new Error(String(error)))
+    const errorText = formatError(error)
+    const customBase = storeBaseUrl(route.provider)
+    const notFoundHint =
+      customBase && errorText.includes('404')
+        ? ` — "${route.model}" may not exist on ${customBase}. Run /model to pick one from that endpoint's list.`
+        : ''
     yield createAssistantAPIErrorMessage({
-      content: `Provider error (${route.provider}/${classified}): ${formatError(error)}`,
+      content: `Provider error (${route.provider}/${classified}): ${errorText}${notFoundHint}`,
       apiError: classified === 'auth_error' ? 'invalid_api_key' : 'api_error',
       error: classified,
     })
   }
+}
+
+// Providers hosted behind NVIDIA NIM's universal endpoint — one nvapi- key
+// unlocks all of them, so they share NVIDIA_API_KEY (and each other's stored key).
+const NVIDIA_HOSTED = ['glm', 'kimi', 'deepseek']
+
+function sharedNvidiaKey(): string {
+  const env = process.env.NVIDIA_API_KEY
+  if (env) return env
+  for (const p of NVIDIA_HOSTED) {
+    const stored = directStore.get(`apiKeys.${p}`) as string
+    if (stored) return stored
+  }
+  return ''
 }
 
 function storeApiKey(provider: string): string {
@@ -275,12 +315,36 @@ function storeApiKey(provider: string): string {
     provider === 'openai' ? 'OPENAI_API_KEY' :
     provider === 'deepseek' ? 'DEEPSEEK_API_KEY' :
     provider === 'minimax' ? 'MINIMAX_API_KEY' :
+    provider === 'glm' ? 'GLM_API_KEY' :
+    provider === 'kimi' ? 'KIMI_API_KEY' :
     'GEMINI_API_KEY'
-  return (
+  const raw =
     process.env[envVar] ||
     (directStore.get(`apiKeys.${provider}`) as string) ||
+    (NVIDIA_HOSTED.includes(provider) ? sharedNvidiaKey() : '') ||
     ''
-  )
+  // Keep only visible ASCII: a stray newline/space/zero-width char from a paste
+  // ends up in the Authorization header value and the runtime rejects it
+  // ("invalid header value"). Real API keys are always printable ASCII.
+  return String(raw).replace(/[^\x21-\x7E]/g, '')
+}
+
+// User-configured API endpoint (e.g. NVIDIA NIM, OpenRouter, a local gateway)
+// that overrides the provider's official base URL. Env var wins over the
+// stored value; empty string means "use the provider default".
+function storeBaseUrl(provider: string): string {
+  const envVar =
+    provider === 'openai' ? 'OPENAI_BASE_URL' :
+    provider === 'deepseek' ? 'DEEPSEEK_BASE_URL' :
+    provider === 'minimax' ? 'MINIMAX_BASE_URL' :
+    provider === 'glm' ? 'GLM_BASE_URL' :
+    provider === 'kimi' ? 'KIMI_BASE_URL' :
+    'GEMINI_BASE_URL'
+  const value =
+    process.env[envVar] ||
+    (directStore.get(`baseUrls.${provider}`) as string) ||
+    ''
+  return String(value).trim().replace(/\/+$/, '')
 }
 
 async function ensureOpenAIToken(): Promise<string> {
@@ -342,7 +406,8 @@ async function* streamOpenAIChat(
   apiKey: string,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const { default: OpenAI } = await import('openai')
-  const client = new OpenAI({ apiKey })
+  const customBase = storeBaseUrl('openai')
+  const client = new OpenAI({ apiKey, ...(customBase ? { baseURL: customBase } : {}) })
   const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
   const stream = await retryOnTransient(async () =>
     client.chat.completions.create(
@@ -558,11 +623,15 @@ async function* streamGemini(
 
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
   const client = new GoogleGenerativeAI(apiKey)
-  const genModel = client.getGenerativeModel({
-    model,
-    systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini', messages, model),
-    ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
-  })
+  const customBase = storeBaseUrl('gemini')
+  const genModel = client.getGenerativeModel(
+    {
+      model,
+      systemInstruction: nativeSystemPrompt(systemPrompt, 'gemini', messages, model),
+      ...(tools.length > 0 ? { tools: [{ functionDeclarations: tools }] } : {}),
+    },
+    customBase ? { baseUrl: customBase } : undefined,
+  )
   const result = await retryOnTransient(() =>
     genModel.generateContentStream(
       {
@@ -597,7 +666,14 @@ async function* streamGemini(
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
-function getDeepSeekThinking(thinkingConfig?: ThinkingConfig): Record<string, unknown> {
+function getDeepSeekThinking(
+  thinkingConfig?: ThinkingConfig,
+  customBase?: string,
+): Record<string, unknown> {
+  // `thinking` is a field of DeepSeek's official API. Third-party OpenAI-compatible
+  // endpoints (NVIDIA NIM, gateways...) reject unknown top-level fields with a
+  // 400 (no body), so omit it whenever a custom base URL is in use.
+  if (customBase) return {}
   // The user's session-level thinking toggle wins over the env default.
   if (thinkingConfig?.type === 'disabled') return {}
   const mode = (process.env.DEEPSEEK_THINKING || 'high').toLowerCase()
@@ -624,13 +700,19 @@ async function* streamDeepSeek(
   const apiKey = storeApiKey('deepseek')
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not configured')
 
-  const isOpenRouter = apiKey.startsWith('sk-or-v1-')
-  const baseURL = isOpenRouter ? 'https://openrouter.ai/api/v1' : 'https://api.deepseek.com'
+  // A custom base URL (NVIDIA NIM, a gateway, etc.) takes priority and uses
+  // the model name as typed — prefixing rules only apply to known endpoints.
+  const customBase = storeBaseUrl('deepseek')
+  const isOpenRouter = !customBase && apiKey.startsWith('sk-or-v1-')
+  const baseURL = customBase || (isOpenRouter ? 'https://openrouter.ai/api/v1' : 'https://api.deepseek.com')
   const actualModel = isOpenRouter ? `deepseek/${model}` : model
 
   const { default: OpenAI } = await import('openai')
   const client = new OpenAI({ apiKey, baseURL })
   const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
+  // Only attach extra_body when there's actually something to send — a bare
+  // `extra_body: {}` is itself an unknown field to strict gateways (400 no body).
+  const thinkingBody = getDeepSeekThinking(thinkingConfig, customBase)
   const stream = await retryOnTransient(async () =>
     client.chat.completions.create(
       {
@@ -641,7 +723,7 @@ async function* streamDeepSeek(
           ...messagesToOpenAIChat(messages),
         ],
         ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
-        extra_body: getDeepSeekThinking(thinkingConfig),
+        ...(Object.keys(thinkingBody).length > 0 ? { extra_body: thinkingBody } : {}),
       },
       { signal },
     ),
@@ -682,6 +764,72 @@ async function* streamDeepSeek(
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
 }
 
+// Generic OpenAI-compatible streamer for NVIDIA-hosted providers (GLM, Kimi).
+// Same shape as streamDeepSeek minus the DeepSeek-only `thinking` extra_body;
+// base URL defaults to NVIDIA's universal endpoint but honors a custom override.
+async function* streamNvidiaHosted(
+  provider: 'glm' | 'kimi',
+  model: string,
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  emitChunk: NativeEmitChunk,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  const apiKey = storeApiKey(provider)
+  if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`)
+
+  const baseURL = storeBaseUrl(provider) || NVIDIA_BASE_URL
+
+  const { default: OpenAI } = await import('openai')
+  const client = new OpenAI({ apiKey, baseURL })
+  const toolCallChunks = new Map<number, { id: string; name: string; arguments: string }>()
+  const stream = await retryOnTransient(async () =>
+    client.chat.completions.create(
+      {
+        model,
+        stream: true,
+        messages: [
+          { role: 'system', content: nativeSystemPrompt(systemPrompt, provider, messages, model) },
+          ...messagesToOpenAIChat(messages),
+        ],
+        ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
+      },
+      { signal },
+    ),
+  )
+
+  for await (const part of stream) {
+    const rawDelta = part.choices?.[0]?.delta as Record<string, unknown> | undefined
+    const reasoning = extractReasoningDelta(rawDelta)
+    if (reasoning) {
+      for (const event of emitChunk('thinking', reasoning)) yield { type: 'event', event }
+    }
+    const delta = part.choices?.[0]?.delta?.content
+    if (delta) {
+      for (const event of emitChunk('text', delta)) yield { type: 'event', event }
+    }
+
+    for (const call of part.choices?.[0]?.delta?.tool_calls ?? []) {
+      const index = call.index ?? 0
+      const existing = toolCallChunks.get(index) ?? { id: '', name: '', arguments: '' }
+      if (call.id) existing.id = call.id
+      if (call.function?.name) existing.name = call.function.name
+      if (call.function?.arguments) existing.arguments += call.function.arguments
+      toolCallChunks.set(index, existing)
+    }
+  }
+
+  const toolCalls = [...toolCallChunks.values()]
+    .filter(call => call.name)
+    .map(call => ({
+      id: call.id || randomUUID(),
+      name: call.name,
+      input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
+    }))
+  if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
+}
+
 async function* streamMiniMax(
   model: string,
   messages: Message[],
@@ -693,6 +841,9 @@ async function* streamMiniMax(
   const apiKey = storeApiKey('minimax')
   if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured')
 
+  const miniMaxBase = storeBaseUrl('minimax') || 'https://api.minimax.io/v1'
+  const miniMaxEndpoint = `${miniMaxBase}/chat/completions`
+
   const requestBody: Record<string, unknown> = {
     model,
     messages: [
@@ -703,7 +854,7 @@ async function* streamMiniMax(
     ...(tools.length > 0 ? { tools, tool_choice: 'auto' } : {}),
   }
 
-  const response = await fetchMiniMaxWithRetry('https://api.minimax.io/v1/chat/completions', {
+  const response = await fetchMiniMaxWithRetry(miniMaxEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -788,7 +939,7 @@ async function* streamMiniMax(
   if (!fullText && !toolCallChunks.size) {
     const nonStreamBody = JSON.stringify(requestBody)
     try {
-      const nsResponse = await fetchMiniMaxWithRetry('https://api.minimax.io/v1/chat/completions', {
+      const nsResponse = await fetchMiniMaxWithRetry(miniMaxEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1319,11 +1470,17 @@ async function buildNativeToolSchemasUncached(
 
 function nativeSystemPrompt(
   systemPrompt: SystemPrompt,
-  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax',
+  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi',
   messages: Message[] = [],
   model = '',
 ): string {
-  const providerName = provider === 'openai' ? 'OpenAI' : provider === 'deepseek' ? 'DeepSeek' : provider === 'minimax' ? 'MiniMax' : 'Gemini'
+  const providerName =
+    provider === 'openai' ? 'OpenAI' :
+    provider === 'deepseek' ? 'DeepSeek' :
+    provider === 'minimax' ? 'MiniMax' :
+    provider === 'glm' ? 'GLM' :
+    provider === 'kimi' ? 'Kimi' :
+    'Gemini'
   const poweredBy = model ? `${providerName} (model: ${model})` : providerName
   const identity = [
     `You are Axolot, an elite terminal AI assistant powered by ${poweredBy}.`,

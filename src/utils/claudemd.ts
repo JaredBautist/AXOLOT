@@ -886,14 +886,27 @@ export const getMemoryFiles = memoize(
       // Try reading CLAUDE.md (Project) - only if projectSettings is enabled
       if (isSettingSourceEnabled('projectSettings') && !skipProject) {
         const projectPath = join(dir, 'CLAUDE.md')
-        result.push(
-          ...(await processMemoryFile(
-            projectPath,
-            'Project',
-            processedPaths,
-            includeExternal,
-          )),
+        const claudeMdFiles = await processMemoryFile(
+          projectPath,
+          'Project',
+          processedPaths,
+          includeExternal,
         )
+        result.push(...claudeMdFiles)
+
+        // AGENTS.md (cross-tool agent instructions standard) — fallback when
+        // the directory has no CLAUDE.md, so both never load duplicated.
+        if (claudeMdFiles.length === 0) {
+          const agentsPath = join(dir, 'AGENTS.md')
+          result.push(
+            ...(await processMemoryFile(
+              agentsPath,
+              'Project',
+              processedPaths,
+              includeExternal,
+            )),
+          )
+        }
 
         // Try reading .claude/CLAUDE.md (Project)
         const dotClaudePath = join(dir, '.claude', 'CLAUDE.md')
@@ -1256,14 +1269,19 @@ export async function getMemoryFilesForNestedDirectory(
   // Process project memory files (CLAUDE.md and .claude/CLAUDE.md)
   if (isSettingSourceEnabled('projectSettings')) {
     const projectPath = join(dir, 'CLAUDE.md')
-    result.push(
-      ...(await processMemoryFile(
-        projectPath,
-        'Project',
-        processedPaths,
-        false,
-      )),
+    const claudeMdFiles = await processMemoryFile(
+      projectPath,
+      'Project',
+      processedPaths,
+      false,
     )
+    result.push(...claudeMdFiles)
+    if (claudeMdFiles.length === 0) {
+      const agentsPath = join(dir, 'AGENTS.md')
+      result.push(
+        ...(await processMemoryFile(agentsPath, 'Project', processedPaths, false)),
+      )
+    }
     const dotClaudePath = join(dir, '.claude', 'CLAUDE.md')
     result.push(
       ...(await processMemoryFile(
@@ -1435,8 +1453,8 @@ export async function shouldShowClaudeMdExternalIncludesWarning(): Promise<boole
 export function isMemoryFilePath(filePath: string): boolean {
   const name = basename(filePath)
 
-  // CLAUDE.md or CLAUDE.local.md anywhere
-  if (name === 'CLAUDE.md' || name === 'CLAUDE.local.md') {
+  // CLAUDE.md, CLAUDE.local.md, or AGENTS.md anywhere
+  if (name === 'CLAUDE.md' || name === 'CLAUDE.local.md' || name === 'AGENTS.md') {
     return true
   }
 

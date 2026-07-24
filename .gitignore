@@ -74,3 +74,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local runtime state (per-user memory + learning) — never commit
+.axolot/

@@ -16,6 +16,9 @@ import {
   getApiKey,
   clearCredentials,
   setActiveProvider,
+  saveBaseUrl,
+  getBaseUrl,
+  clearBaseUrl,
 } from '../direct/config.js'
 import { openBrowser } from '../utils/browser.js'
 import { OAuthService } from '../services/oauth/index.js'
@@ -33,6 +36,7 @@ const PROVIDER_MODEL = '__AXOLOT_PROVIDER_MODEL__'
 const PROVIDER_BACK = '__AXOLOT_PROVIDER_BACK__'
 const PROVIDER_LOGIN_OAUTH = '__AXOLOT_LOGIN_OAUTH__'
 const PROVIDER_LOGOUT = '__AXOLOT_LOGOUT__'
+const PROVIDER_BASE_URL = '__AXOLOT_PROVIDER_BASE_URL__'
 
 const AUTH_URLS: Record<string, { login: string; label: string }> = {
   openai: {
@@ -54,6 +58,14 @@ const AUTH_URLS: Record<string, { login: string; label: string }> = {
   minimax: {
     login: 'https://platform.minimaxi.com/',
     label: 'platform.minimaxi.com',
+  },
+  glm: {
+    login: 'https://build.nvidia.com/',
+    label: 'build.nvidia.com (NVIDIA key)',
+  },
+  kimi: {
+    login: 'https://build.nvidia.com/',
+    label: 'build.nvidia.com (NVIDIA key)',
   },
 }
 
@@ -93,6 +105,20 @@ const providerOptions = [
     placeholder: 'MiniMax-M3',
     hasOAuth: false,
   },
+  {
+    id: 'glm',
+    label: 'GLM (Zhipu)',
+    description: 'GLM via NVIDIA NIM, e.g. z-ai/glm-4.6. Uses your NVIDIA key.',
+    placeholder: 'z-ai/glm-4.6',
+    hasOAuth: false,
+  },
+  {
+    id: 'kimi',
+    label: 'Kimi (Moonshot)',
+    description: 'Kimi via NVIDIA NIM, e.g. moonshotai/kimi-k2-instruct. Uses your NVIDIA key.',
+    placeholder: 'moonshotai/kimi-k2-instruct',
+    hasOAuth: false,
+  },
 ] as const
 
 type ProviderOption = (typeof providerOptions)[number]
@@ -104,6 +130,7 @@ type Page =
   | { name: 'openai-oauth-waiting'; provider: ProviderOption }
   | { name: 'enter-key'; provider: ProviderOption }
   | { name: 'enter-model'; provider: ProviderOption }
+  | { name: 'enter-base-url'; provider: ProviderOption }
   | { name: 'select-model'; provider: ProviderOption }
 
 type OAuthStatus =
@@ -128,6 +155,8 @@ export function AxolotOpenClawModelPicker({
   const [page, setPage] = React.useState<Page>({ name: 'providers' })
   const [modelInput, setModelInput] = React.useState('')
   const [keyInput, setKeyInput] = React.useState('')
+  const [baseUrlInput, setBaseUrlInput] = React.useState('')
+  const [baseUrlError, setBaseUrlError] = React.useState<string | null>(null)
   const [cursorOffset, setCursorOffset] = React.useState(0)
   const [oauthStatus, setOauthStatus] = React.useState<OAuthStatus>({
     type: 'idle',
@@ -138,6 +167,11 @@ export function AxolotOpenClawModelPicker({
   const [openaiRefreshToken, setOpenaiRefreshToken] = React.useState<
     string | null
   >(null)
+  const [remoteModels, setRemoteModels] = React.useState<{
+    providerId: string
+    baseUrl: string
+    ids: string[]
+  } | null>(null)
 
   const activeModel = getOpenClawPrimaryModel()
   const allModels = listOpenClawModels()
@@ -231,6 +265,53 @@ export function AxolotOpenClawModelPicker({
     }
   }, [page.name, current?.id])
 
+  // When the provider points at a custom endpoint, list that endpoint's real
+  // model IDs (OpenAI-compatible GET /models) so the user doesn't have to
+  // guess names like "deepseek-ai/deepseek-v4-pro" vs "deepseek-v4-pro".
+  React.useEffect(() => {
+    if (page.name !== 'select-model' || !current) return
+    const providerId = current.id
+    const baseUrl = getBaseUrl(providerId)
+    if (!baseUrl) return
+    if (
+      remoteModels &&
+      remoteModels.providerId === providerId &&
+      remoteModels.baseUrl === baseUrl
+    ) {
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${baseUrl}/models`, {
+          headers: { Authorization: `Bearer ${getApiKey(providerId)}` },
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        const ids = (Array.isArray(data?.data) ? data.data : [])
+          .map((m: { id?: unknown }) => String(m?.id || ''))
+          .filter(Boolean)
+        if (!cancelled && ids.length > 0) {
+          // Models matching the provider name first, then the rest.
+          ids.sort((a: string, b: string) => {
+            const aMatch = a.toLowerCase().includes(providerId) ? 0 : 1
+            const bMatch = b.toLowerCase().includes(providerId) ? 0 : 1
+            return aMatch - bMatch || a.localeCompare(b)
+          })
+          setRemoteModels({ providerId, baseUrl, ids })
+        }
+      } catch {
+        // Endpoint without /models (or non-OpenAI-compatible) — keep presets.
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [page.name, current?.id])
+
   // Open browser for non-OAuth providers on signin page
   React.useEffect(() => {
     if (page.name !== 'signin' || !current) return
@@ -257,14 +338,19 @@ export function AxolotOpenClawModelPicker({
     if (provider.id === 'gemini') return 'success'
     if (provider.id === 'deepseek') return 'warning'
     if (provider.id === 'minimax') return 'info'
+    if (provider.id === 'glm') return 'success'
+    if (provider.id === 'kimi') return 'warning'
     return 'permission'
   }
 
   function saveCredentials(
     provider: ProviderOption,
-    credentials: string,
+    rawCredentials: string,
     type: 'apikey' | 'oauth' = 'apikey',
   ): void {
+    // Keep only visible ASCII: a trailing newline/zero-width char from the paste
+    // would otherwise land in the Authorization header and be rejected at runtime.
+    const credentials = String(rawCredentials || '').replace(/[^\x21-\x7E]/g, '')
     if (type === 'oauth') {
       saveOAuthToken(provider.id, credentials)
     } else {
@@ -276,6 +362,8 @@ export function AxolotOpenClawModelPicker({
     else if (provider.id === 'gemini') process.env.GEMINI_API_KEY = credentials
     else if (provider.id === 'deepseek') process.env.DEEPSEEK_API_KEY = credentials
     else if (provider.id === 'minimax') process.env.MINIMAX_API_KEY = credentials
+    else if (provider.id === 'glm') process.env.GLM_API_KEY = credentials
+    else if (provider.id === 'kimi') process.env.KIMI_API_KEY = credentials
     else if (provider.id === 'claude') {
       if (type === 'oauth') {
         process.env.ANTHROPIC_AUTH_TOKEN = credentials
@@ -312,19 +400,17 @@ export function AxolotOpenClawModelPicker({
 
   // ===== PAGE: PROVIDER LIST =====
   if (page.name === 'providers') {
-    const options: OptionWithDescription<string>[] = providerOptions.map(p => ({
-      value: `${PROVIDER_PREFIX}${p.id}`,
-      label: p.label,
-      description: (
-        <Box flexDirection="row" gap={1}>
-          <StatusIcon
-            status={isProviderAuthed(p.id) ? 'success' : 'pending'}
-            withSpace={false}
-          />
-          <Text>{p.description}</Text>
-        </Box>
-      ),
-    }))
+    // Select's description only renders plain strings — a React element here
+    // gets stringified to "[object Object]".
+    const options: OptionWithDescription<string>[] = providerOptions.map(p => {
+      const customUrl = getBaseUrl(p.id)
+      const status = isProviderAuthed(p.id) ? '✓ Connected' : '○ Not connected'
+      return {
+        value: `${PROVIDER_PREFIX}${p.id}`,
+        label: p.label,
+        description: `${status} · ${p.description}${customUrl ? ` · ${customUrl}` : ''}`,
+      }
+    })
 
     function handleSelect(value: string): void {
       const providerId = value.slice(PROVIDER_PREFIX.length)
@@ -757,25 +843,135 @@ export function AxolotOpenClawModelPicker({
     )
   }
 
+  // ===== PAGE: ENTER BASE URL =====
+  if (page.name === 'enter-base-url' && current) {
+    const currentUrl = getBaseUrl(current.id)
+    return (
+      <Pane color={paneColorFor(current)}>
+        <Box flexDirection="column">
+          <Box marginBottom={1} flexDirection="column">
+            <Text color={paneColorFor(current)} bold>
+              {current.label} Base URL
+            </Text>
+            <Text dimColor>
+              Point {current.label} requests at any compatible endpoint (NVIDIA
+              NIM, OpenRouter, a local gateway...). Your API key must belong to
+              that endpoint.
+            </Text>
+            {currentUrl ? (
+              <Text dimColor>Current: {currentUrl}</Text>
+            ) : (
+              <Text dimColor>Currently using the official {current.label} API.</Text>
+            )}
+          </Box>
+          <TextInput
+            value={baseUrlInput}
+            onChange={value => {
+              setBaseUrlInput(value)
+              if (baseUrlError) setBaseUrlError(null)
+            }}
+            onSubmit={() => {
+              const trimmed = baseUrlInput.trim()
+              try {
+                if (trimmed) {
+                  saveBaseUrl(current.id, trimmed)
+                } else {
+                  clearBaseUrl(current.id)
+                }
+              } catch (error) {
+                setBaseUrlError(
+                  error instanceof Error ? error.message : 'Invalid base URL',
+                )
+                return
+              }
+              // The Anthropic SDK reads its endpoint from the environment, so
+              // keep it in sync for the current session.
+              if (current.id === 'claude') {
+                if (trimmed) {
+                  process.env.ANTHROPIC_BASE_URL = trimmed.replace(/\/+$/, '')
+                } else {
+                  delete process.env.ANTHROPIC_BASE_URL
+                }
+              }
+              setPage({ name: 'select-model', provider: current })
+            }}
+            onExit={() => setPage({ name: 'select-model', provider: current })}
+            focus={true}
+            placeholder="https://integrate.api.nvidia.com/v1"
+            columns={terminalSize.columns}
+            cursorOffset={cursorOffset}
+            onChangeCursorOffset={setCursorOffset}
+            showCursor={true}
+          />
+          {baseUrlError && (
+            <Box marginTop={1}>
+              <Text color="error">{baseUrlError}</Text>
+            </Box>
+          )}
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>
+              Leave empty and press Enter to go back to the default endpoint.
+            </Text>
+            <Text dimColor italic>
+              <Byline>
+                <KeyboardShortcutHint shortcut="Enter" action="save" />
+                <KeyboardShortcutHint shortcut="Escape" action="back" />
+              </Byline>
+            </Text>
+          </Box>
+        </Box>
+      </Pane>
+    )
+  }
+
   // ===== PAGE: SELECT MODEL =====
   if (page.name === 'select-model' && current) {
+    const customBaseUrl = getBaseUrl(current.id)
+    const endpointModels =
+      customBaseUrl &&
+      remoteModels &&
+      remoteModels.providerId === current.id &&
+      remoteModels.baseUrl === customBaseUrl
+        ? remoteModels.ids
+        : null
     const models = providerModelsFor(current)
+    const endpointHost = customBaseUrl
+      ? customBaseUrl.replace(/^https?:\/\//, '').split('/')[0]
+      : ''
     const options: OptionWithDescription<string>[] = [
-      ...models.map(m => ({
-        value: m.id,
-        label:
-          m.id === activeModel ? (
-            <Text>
-              {m.id} <Text color="success">(active)</Text>
-            </Text>
-          ) : (
-            m.id
-          ),
-        description: [m.input, m.context ? `${m.context} ctx` : '']
-          .filter(Boolean)
-          .join(' · '),
-      })),
-      ...(models.length === 0
+      // Custom endpoint: its real catalog replaces the built-in presets,
+      // which most likely don't exist there.
+      ...(endpointModels
+        ? endpointModels.map(id => {
+            const ref = `${current.id}/${id}`
+            return {
+              value: ref,
+              label:
+                ref === activeModel ? (
+                  <Text>
+                    {id} <Text color="success">(active)</Text>
+                  </Text>
+                ) : (
+                  id
+                ),
+              description: `From ${endpointHost}`,
+            } as OptionWithDescription<string>
+          })
+        : models.map(m => ({
+            value: m.id,
+            label:
+              m.id === activeModel ? (
+                <Text>
+                  {m.id} <Text color="success">(active)</Text>
+                </Text>
+              ) : (
+                m.id
+              ),
+            description: [m.input, m.context ? `${m.context} ctx` : '']
+              .filter(Boolean)
+              .join(' · '),
+          }))),
+      ...(!endpointModels && models.length === 0
         ? [
             {
               value: `${current.id}/${current.placeholder}`,
@@ -788,6 +984,13 @@ export function AxolotOpenClawModelPicker({
         value: PROVIDER_MODEL,
         label: 'Enter model name manually',
         description: `Type a custom model name for ${current.label}.`,
+      },
+      {
+        value: PROVIDER_BASE_URL,
+        label: 'Set custom base URL',
+        description: getBaseUrl(current.id)
+          ? `Current: ${getBaseUrl(current.id)} — change or clear the endpoint.`
+          : 'Use a compatible endpoint (NVIDIA NIM, OpenRouter, gateway...).',
       },
       {
         value: PROVIDER_BACK,
@@ -806,6 +1009,14 @@ export function AxolotOpenClawModelPicker({
             <Text dimColor>
               Pick a model to start working with {current.label}.
             </Text>
+            {customBaseUrl && !endpointModels && (
+              <Text dimColor>Loading models from {endpointHost}...</Text>
+            )}
+            {endpointModels && (
+              <Text dimColor>
+                Showing {endpointModels.length} models from {endpointHost}.
+              </Text>
+            )}
           </Box>
           <Select
             options={options}
@@ -814,6 +1025,12 @@ export function AxolotOpenClawModelPicker({
                 setModelInput('')
                 setCursorOffset(0)
                 setPage({ name: 'enter-model', provider: current })
+              } else if (value === PROVIDER_BASE_URL) {
+                const existing = getBaseUrl(current.id)
+                setBaseUrlInput(existing)
+                setBaseUrlError(null)
+                setCursorOffset(existing.length)
+                setPage({ name: 'enter-base-url', provider: current })
               } else if (value === PROVIDER_BACK) {
                 setPage({ name: 'providers' })
               } else {

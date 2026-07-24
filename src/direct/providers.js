@@ -1,17 +1,29 @@
-import Anthropic from '@anthropic-ai/sdk'
-import OpenAI from 'openai'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { applyProxyEnv, getProxyConfig, normalizeProvider } from './config.js'
+import { applyProxyEnv, getBaseUrl, getProxyConfig, normalizeProvider, NVIDIA_BASE_URL } from './config.js'
+
+// SDKs se cargan bajo demanda: importar los tres al inicio penaliza el
+// arranque de cada `axolot chat` aunque solo se use un provider.
+
+function emitReasoning(delta, options) {
+  const value = delta?.reasoning_content ?? delta?.reasoning
+  if (typeof value === 'string' && value && options.onThinking) {
+    options.onThinking(value)
+  }
+}
 
 export class ClaudeProvider {
   constructor({ apiKey }) {
     applyProxyEnv('claude')
     const proxy = getProxyConfig('claude')
-    const effectiveKey = proxy?.authToken || apiKey
-    this.client = new Anthropic({ apiKey: effectiveKey })
+    this.apiKey = proxy?.authToken || apiKey
+    this.customBase = (!proxy?.baseURL && getBaseUrl('claude')) || ''
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk')
+    this.client ??= new Anthropic({
+      apiKey: this.apiKey,
+      ...(this.customBase ? { baseURL: this.customBase } : {}),
+    })
     const stream = await this.client.messages.create(
       {
         model,
@@ -26,6 +38,13 @@ export class ClaudeProvider {
     for await (const event of stream) {
       if (
         event.type === 'content_block_delta' &&
+        event.delta?.type === 'thinking_delta' &&
+        event.delta.thinking
+      ) {
+        options.onThinking?.(event.delta.thinking)
+      }
+      if (
+        event.type === 'content_block_delta' &&
         event.delta?.type === 'text_delta' &&
         event.delta.text
       ) {
@@ -37,10 +56,16 @@ export class ClaudeProvider {
 
 export class OpenAIProvider {
   constructor({ apiKey }) {
-    this.client = new OpenAI({ apiKey })
+    this.apiKey = apiKey
+    this.customBase = getBaseUrl('openai')
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
+    const { default: OpenAI } = await import('openai')
+    this.client ??= new OpenAI({
+      apiKey: this.apiKey,
+      ...(this.customBase ? { baseURL: this.customBase } : {}),
+    })
     const messages = []
     if (options.system) {
       messages.push({ role: 'system', content: options.system })
@@ -57,8 +82,9 @@ export class OpenAIProvider {
     )
 
     for await (const chunk of stream) {
-      const text = chunk.choices?.[0]?.delta?.content
-      if (text) onChunk(text)
+      const delta = chunk.choices?.[0]?.delta
+      emitReasoning(delta, options)
+      if (delta?.content) onChunk(delta.content)
     }
   }
 }
@@ -67,16 +93,33 @@ function isOpenRouterKey(key) {
   return typeof key === 'string' && key.startsWith('sk-or-v1-')
 }
 
+// Campo específico de la API oficial de DeepSeek — endpoints de terceros
+// (NVIDIA NIM, gateways...) pueden rechazarlo o ignorarlo. Configurable con
+// DEEPSEEK_THINKING=off|low|medium|high (default: high, como la TUI).
+function deepSeekThinkingBody(customBase) {
+  if (customBase) return {}
+  const mode = (process.env.DEEPSEEK_THINKING || 'high').toLowerCase()
+  if (mode === 'off' || mode === 'false' || mode === 'none') return {}
+  return { extra_body: { thinking: { type: mode } } }
+}
+
 export class DeepSeekProvider {
   constructor({ apiKey }) {
-    this.isOpenRouter = isOpenRouterKey(apiKey)
-    const baseURL = this.isOpenRouter
-      ? 'https://openrouter.ai/api/v1'
-      : 'https://api.deepseek.com'
-    this.client = new OpenAI({ apiKey, baseURL })
+    // A custom base URL (NVIDIA NIM, a gateway, etc.) takes priority and uses
+    // the model name as typed — prefixing rules only apply to known endpoints.
+    this.apiKey = apiKey
+    this.customBase = getBaseUrl('deepseek')
+    this.isOpenRouter = !this.customBase && isOpenRouterKey(apiKey)
+    this.baseURL =
+      this.customBase ||
+      (this.isOpenRouter
+        ? 'https://openrouter.ai/api/v1'
+        : 'https://api.deepseek.com')
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
+    const { default: OpenAI } = await import('openai')
+    this.client ??= new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL })
     const messages = []
     if (options.system) {
       messages.push({ role: 'system', content: options.system })
@@ -93,14 +136,15 @@ export class DeepSeekProvider {
         messages,
         stream: true,
         max_tokens: 16384,
-        extra_body: { thinking: 'high' },
+        ...deepSeekThinkingBody(this.customBase),
       },
       { signal: options.signal },
     )
 
     for await (const chunk of stream) {
-      const text = chunk.choices?.[0]?.delta?.content
-      if (text) onChunk(text)
+      const delta = chunk.choices?.[0]?.delta
+      emitReasoning(delta, options)
+      if (delta?.content) onChunk(delta.content)
     }
   }
 }
@@ -108,7 +152,7 @@ export class DeepSeekProvider {
 export class MiniMaxProvider {
   constructor({ apiKey }) {
     this.apiKey = apiKey
-    this.baseURL = 'https://api.minimax.io/v1'
+    this.baseURL = getBaseUrl('minimax') || 'https://api.minimax.io/v1'
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
@@ -142,7 +186,6 @@ export class MiniMaxProvider {
     const decoder = new TextDecoder()
     let buffer = ''
     let hasContent = false
-    let debugged = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -160,17 +203,7 @@ export class MiniMaxProvider {
 
         try {
           const parsed = JSON.parse(rawData)
-
-          if (!debugged) {
-            debugged = true
-            const choice0 = parsed.choices?.[0]
-            const keys = Object.keys(parsed).join(', ')
-            const choiceKeys = choice0 ? Object.keys(choice0).join(', ') : 'none'
-            const delta = choice0?.delta
-            const deltaKeys = delta ? Object.keys(delta).join(', ') : 'none'
-            console.error(`[MiniMax SSE] topKeys: ${keys} | choiceKeys: ${choiceKeys} | deltaKeys: ${deltaKeys}`)
-          }
-
+          emitReasoning(parsed.choices?.[0]?.delta, options)
           const text =
             parsed.choices?.[0]?.delta?.content ??
             parsed.choices?.[0]?.text ??
@@ -204,16 +237,58 @@ export class MiniMaxProvider {
   }
 }
 
-export class GeminiProvider {
-  constructor({ apiKey }) {
-    this.client = new GoogleGenerativeAI(apiKey)
+// GLM (Zhipu) and Kimi (Moonshot) are plain OpenAI-compatible chat endpoints.
+// They default to NVIDIA NIM's universal endpoint (one key unlocks many models)
+// but honor a custom base URL like every other provider.
+export class OpenAICompatibleProvider {
+  constructor({ apiKey, provider, defaultBase }) {
+    this.apiKey = apiKey
+    this.baseURL = getBaseUrl(provider) || defaultBase
   }
 
   async streamResponse(prompt, model, onChunk, options = {}) {
-    const genModel = this.client.getGenerativeModel({
-      model,
-      systemInstruction: options.system,
-    })
+    const { default: OpenAI } = await import('openai')
+    this.client ??= new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL })
+    const messages = []
+    if (options.system) {
+      messages.push({ role: 'system', content: options.system })
+    }
+    messages.push({ role: 'user', content: prompt })
+
+    const stream = await this.client.chat.completions.create(
+      {
+        model,
+        messages,
+        stream: true,
+        max_tokens: options.maxTokens ?? 16384,
+      },
+      { signal: options.signal },
+    )
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta
+      emitReasoning(delta, options)
+      if (delta?.content) onChunk(delta.content)
+    }
+  }
+}
+
+export class GeminiProvider {
+  constructor({ apiKey }) {
+    this.apiKey = apiKey
+    this.customBase = getBaseUrl('gemini')
+  }
+
+  async streamResponse(prompt, model, onChunk, options = {}) {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    this.client ??= new GoogleGenerativeAI(this.apiKey)
+    const genModel = this.client.getGenerativeModel(
+      {
+        model,
+        systemInstruction: options.system,
+      },
+      this.customBase ? { baseUrl: this.customBase } : undefined,
+    )
 
     const result = await genModel.generateContentStream(
       {
@@ -228,8 +303,19 @@ export class GeminiProvider {
     )
 
     for await (const chunk of result.stream) {
-      const text = chunk.text()
-      if (text) onChunk(text)
+      // Los modelos thinking de Gemini marcan el razonamiento con
+      // `thought: true`; chunk.text() lo mezclaría todo.
+      const parts = chunk.candidates?.[0]?.content?.parts
+      if (Array.isArray(parts) && parts.length > 0) {
+        for (const part of parts) {
+          if (typeof part?.text !== 'string' || !part.text) continue
+          if (part.thought === true) options.onThinking?.(part.text)
+          else onChunk(part.text)
+        }
+      } else {
+        const text = chunk.text()
+        if (text) onChunk(text)
+      }
     }
   }
 }
@@ -252,6 +338,10 @@ export function createProvider(provider, { apiKey }) {
       return new DeepSeekProvider({ apiKey })
     case 'minimax':
       return new MiniMaxProvider({ apiKey })
+    case 'glm':
+      return new OpenAICompatibleProvider({ apiKey, provider: 'glm', defaultBase: NVIDIA_BASE_URL })
+    case 'kimi':
+      return new OpenAICompatibleProvider({ apiKey, provider: 'kimi', defaultBase: NVIDIA_BASE_URL })
     default:
       throw new Error(`Proveedor no soportado: ${provider}`)
   }

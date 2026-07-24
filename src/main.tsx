@@ -639,10 +639,10 @@ export async function main() {
         mainLoopModel,
         effortValue,
       }}>
-        <REPL 
+        <REPL
           unmount={() => { instance.unmount(); process.exit(0); }}
-          permissionMode="bypassPermissions"
-          allowDangerouslySkipPermissions={true}
+          permissionMode={process.env.AXOLOT_YOLO === '1' ? 'bypassPermissions' : 'default'}
+          allowDangerouslySkipPermissions={process.env.AXOLOT_YOLO === '1'}
           commands={commands}
           initialTools={tools}
           initialMessages={[]}
@@ -1109,7 +1109,7 @@ async function run(): Promise<CommanderCommand> {
     if (prompt === 'code') {
       logEvent('tengu_code_prompt_ignored', {});
       // biome-ignore lint/suspicious/noConsole:: intentional console output
-      console.warn(chalk.yellow('Tip: You can launch Claude Code with just `claude`'));
+      console.warn(chalk.yellow('Tip: You can launch Axolot with just `axolot`'));
       prompt = undefined;
     }
 

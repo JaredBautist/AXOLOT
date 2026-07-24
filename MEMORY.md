@@ -1,10 +1,19 @@
 # MEMORY.md — Long-Term Memory
 
 ## ⚠️ Regla Fundamental: TUI Design es OFF-LIMITS
-**NUNCA** modificar componentes de TUI branding sin autorización explícita:
+**NUNCA** modificar el ARTE/LAYOUT de la TUI sin autorización explícita:
 - `AxolotASCIILogo.tsx` — el ajolote rosa es sagrado, no tocar
-- `CondensedLogo.tsx`, `WelcomeV2.tsx`, `LogoV2.tsx` — branding visual, no editar sin permiso
-- Cualquier cambio visual en la interfaz requiere orden directa del usuario
+- `CondensedLogo.tsx`, `WelcomeV2.tsx`, `LogoV2.tsx` — arte/layout visual, no editar sin permiso
+- Cualquier cambio de layout/arte/colores requiere orden directa del usuario
+
+### ✅ Excepción autorizada (24-jul-2026): rebrand de TEXTO "Claude Code" → "Axolot"
+El usuario autorizó cambiar los LITERALES VISIBLES de la TUI de "Claude Code"/"Claude"
+a "Axolot". Esto es distinto del arte/layout. Al hacerlo, cambiar SOLO texto visible;
+NO tocar: tokens de color `claude`, env vars `ANTHROPIC_*`/`CLAUDE_CODE_*`, IDs de
+modelo, provider keys, nombres de tipo/variable (`ClaudeCodeStats`, `loginWithClaudeAi`),
+ni prompts internos de tools/bridge/remote (infra de Anthropic o romperían la app).
+Dejar sin renombrar lo atado a servicios Anthropic cloud (review "on the web",
+stickers, thinkback year-in-review) — renombrarlos engañaría.
 
 ## Proyecto: Axolot CLI
 - Fork de Claude Code rebrandeado como Axolot

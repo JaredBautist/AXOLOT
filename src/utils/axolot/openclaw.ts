@@ -148,6 +148,8 @@ export function getOpenClawProviderLabel(model: string | null): string {
     if (provider === 'gemini' || provider === 'google') return 'Gemini'
     if (provider === 'deepseek') return 'DeepSeek'
     if (provider === 'minimax') return 'MiniMax'
+    if (provider === 'glm') return 'GLM'
+    if (provider === 'kimi') return 'Kimi'
     if (provider === 'claude' || provider === 'anthropic') return 'Anthropic API'
     return 'Native provider'
   }
@@ -178,6 +180,8 @@ export function listOpenClawModels(): OpenClawModel[] {
       directModel('gemini', 'gemini-1.5-flash', 'Gemini'),
       directModel('deepseek', 'deepseek-v4-flash', 'DeepSeek V4 Flash'),
       directModel('minimax', 'MiniMax-M3', 'MiniMax M3'),
+      directModel('glm', 'z-ai/glm-4.6', 'GLM 4.6 (NVIDIA)'),
+      directModel('kimi', 'moonshotai/kimi-k2-instruct', 'Kimi K2 (NVIDIA)'),
     ]
 
     const openaiCredType = directStore.get('credentialType.openai') as string
@@ -286,7 +290,10 @@ function directModelRef(): string {
   const model = String(
     directStore.get(`models.${provider}`) || defaultDirectModel(provider),
   )
-  return model.includes('/') ? model : `${provider}/${model}`
+  // Model IDs can themselves contain slashes (e.g. NVIDIA NIM's
+  // "deepseek-ai/deepseek-v4-pro"), so only skip prefixing when the ref
+  // already starts with the provider segment.
+  return model.startsWith(`${provider}/`) ? model : `${provider}/${model}`
 }
 
 function setDirectModel(modelRef: string): void {
@@ -304,6 +311,8 @@ function normalizeDirectProvider(provider: string): string {
   const value = provider.toLowerCase()
   if (value === 'anthropic') return 'claude'
   if (value === 'google') return 'gemini'
+  if (value === 'zhipu' || value === 'zai' || value === 'z-ai') return 'glm'
+  if (value === 'moonshot' || value === 'moonshotai') return 'kimi'
   return value
 }
 
@@ -312,14 +321,30 @@ function defaultDirectModel(provider: string): string {
   if (provider === 'gemini') return 'gemini-2.5-pro'
   if (provider === 'deepseek') return 'deepseek-v4-flash'
   if (provider === 'minimax') return 'MiniMax-M3'
+  if (provider === 'glm') return 'z-ai/glm-4.6'
+  if (provider === 'kimi') return 'moonshotai/kimi-k2-instruct'
   return 'claude-3-5-sonnet-latest'
+}
+
+// One nvapi- key unlocks every NVIDIA-hosted provider, so GLM/Kimi/DeepSeek
+// share NVIDIA_API_KEY (and each other's) when their own key isn't set.
+function sharedNvidiaDirectKey(): string {
+  return (
+    process.env.NVIDIA_API_KEY ||
+    process.env.DEEPSEEK_API_KEY ||
+    process.env.GLM_API_KEY ||
+    process.env.KIMI_API_KEY ||
+    ''
+  )
 }
 
 function getDirectApiKey(provider: string): string {
   const normalized = normalizeDirectProvider(provider)
   if (normalized === 'openai') return process.env.OPENAI_API_KEY || ''
   if (normalized === 'gemini') return process.env.GEMINI_API_KEY || ''
-  if (normalized === 'deepseek') return process.env.DEEPSEEK_API_KEY || ''
+  if (normalized === 'deepseek') return process.env.DEEPSEEK_API_KEY || sharedNvidiaDirectKey()
+  if (normalized === 'glm') return process.env.GLM_API_KEY || sharedNvidiaDirectKey()
+  if (normalized === 'kimi') return process.env.KIMI_API_KEY || sharedNvidiaDirectKey()
   if (normalized === 'minimax') return process.env.MINIMAX_API_KEY || ''
   return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''
 }

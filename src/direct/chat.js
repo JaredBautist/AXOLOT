@@ -10,6 +10,7 @@ import { stdin as input, stdout as output } from 'node:process'
 import {
   getActiveProvider,
   getApiKey,
+  getBaseUrl,
   getConfigPath,
   getCredentialType,
   getDefaultModel,
@@ -39,13 +40,32 @@ program
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')
   .option('--system <prompt>', 'system prompt')
+  .option('--yolo', 'skip ALL permission prompts (dangerous — full bypass mode)')
+  .option(
+    '--dangerously-skip-permissions',
+    'skip ALL permission prompts (dangerous — full bypass mode)',
+  )
   .action(async (promptParts, options) => {
+    const yolo =
+      options.yolo ||
+      options.dangerouslySkipPermissions ||
+      process.env.AXOLOT_YOLO === '1'
+
     if (promptParts.length === 0 && process.stdin.isTTY) {
-      await launchTui()
+      await launchTui({ yolo })
       return
     }
 
-    await runChat(promptParts, options)
+    // Non-interactive with a prompt: run the FULL agent engine (tools, skills,
+    // subagents) in --print mode instead of a raw single-shot completion.
+    // The raw completion is still available via `axolot chat "..."`.
+    const prompt = await resolvePrompt(promptParts)
+    if (!prompt) {
+      console.error('Prompt empty. Example: axolot "fix the failing test"')
+      process.exitCode = 1
+      return
+    }
+    await runHeadlessAgent(prompt, { yolo })
   })
 
 program
@@ -160,13 +180,35 @@ async function runChat(promptParts, options) {
   try {
     const { createProvider } = await import('./providers.js')
     const provider = createProvider(providerName, { apiKey })
+
+    // Modelos con razonamiento (DeepSeek, NVIDIA NIM, MiniMax...) emiten el
+    // thinking antes que la respuesta; mostrarlo atenuado por stderr para que
+    // no parezca que el CLI está colgado (stdout queda limpio para pipes).
+    // Ocultable con AXOLOT_HIDE_THINKING=1.
+    const showThinking =
+      process.stderr.isTTY && process.env.AXOLOT_HIDE_THINKING !== '1'
+    let sawThinking = false
+    let contentStarted = false
+
     await provider.streamResponse(
       prompt,
       model,
-      chunk => process.stdout.write(chunk),
+      chunk => {
+        if (sawThinking && !contentStarted) {
+          contentStarted = true
+          process.stderr.write('\n\n')
+        }
+        process.stdout.write(chunk)
+      },
       {
         signal: abortController.signal,
         system: systemPrompt,
+        onThinking: showThinking
+          ? text => {
+              sawThinking = true
+              process.stderr.write(`\x1b[2m${text}\x1b[0m`)
+            }
+          : undefined,
       },
     )
     process.stdout.write('\n')
@@ -193,7 +235,7 @@ function formatError(error) {
   return String(error)
 }
 
-async function launchTui() {
+function buildEngineSpawnConfig({ yolo = false } = {}) {
   const providerName = hasActiveProvider() ? getActiveProvider() : null
   const model = providerName ? getDefaultModel(providerName) : null
   const apiKey = providerName ? getApiKey(providerName) : ''
@@ -261,19 +303,38 @@ async function launchTui() {
       env.ANTHROPIC_API_KEY = proxyCfg.authToken
     }
   } else {
-    delete env.ANTHROPIC_BASE_URL
+    // Sin proxy: respetar la base URL custom del usuario para Claude
+    // (env var o configurada via /model). Para providers nativos se limpia —
+    // el motor habla con Anthropic solo como passthrough.
+    const customBase = providerName === 'claude' ? getBaseUrl('claude') : ''
+    if (customBase) {
+      env.ANTHROPIC_BASE_URL = customBase
+    } else {
+      delete env.ANTHROPIC_BASE_URL
+    }
   }
   for (const key of PROXY_CLEANUP_KEYS) {
     delete env[key]
   }
 
+  // Permission model: normal approval flow by default (like Claude Code).
+  // Full bypass only with explicit opt-in (--yolo / AXOLOT_YOLO=1).
+  const permissionArgs = yolo
+    ? [
+        '--dangerously-skip-permissions',
+        '--allow-dangerously-skip-permissions',
+        '--permission-mode',
+        'bypassPermissions',
+      ]
+    : []
+  if (yolo) {
+    env.AXOLOT_YOLO = '1'
+  }
+
   const args = [
     'run',
     resolve(repoRoot, 'src/dev-entry.ts'),
-    '--dangerously-skip-permissions',
-    '--allow-dangerously-skip-permissions',
-    '--permission-mode',
-    'bypassPermissions',
+    ...permissionArgs,
     '--add-dir',
     launchDir,
     '--add-dir',
@@ -286,7 +347,17 @@ async function launchTui() {
     settingsPath,
   ]
 
-  const bunCommand = resolveBundledBun(repoRoot)
+  return {
+    bunCommand: resolveBundledBun(repoRoot),
+    args,
+    env,
+    launchDir,
+  }
+}
+
+async function launchTui({ yolo = false } = {}) {
+  const { bunCommand, args, env, launchDir } = buildEngineSpawnConfig({ yolo })
+
   const result = spawnSync(bunCommand, args, {
     cwd: launchDir,
     env,
@@ -295,6 +366,34 @@ async function launchTui() {
 
   if (result.error) {
     console.error(`No pude abrir la TUI: ${formatError(result.error)}`)
+    process.exitCode = 1
+    return
+  }
+
+  process.exitCode = result.status ?? 0
+}
+
+async function runHeadlessAgent(prompt, { yolo = false } = {}) {
+  const { bunCommand, args, env, launchDir } = buildEngineSpawnConfig({ yolo })
+  env.CLAUDE_CODE_ASSUME_TTY = '0'
+
+  // Non-interactive runs can't answer permission prompts. Without --yolo,
+  // auto-accept file edits but let anything riskier be denied by policy.
+  const headlessArgs = [
+    ...args,
+    ...(yolo ? [] : ['--permission-mode', 'acceptEdits']),
+    '--print',
+    prompt,
+  ]
+
+  const result = spawnSync(bunCommand, headlessArgs, {
+    cwd: launchDir,
+    env,
+    stdio: 'inherit',
+  })
+
+  if (result.error) {
+    console.error(`No pude ejecutar el agente: ${formatError(result.error)}`)
     process.exitCode = 1
     return
   }
@@ -332,6 +431,9 @@ async function promptForApiKey(provider) {
 function modelRefForProvider(provider, model) {
   const value = String(model || '').trim()
   if (!value) return provider
-  if (value.includes('/')) return value
+  // Model IDs can themselves contain slashes (e.g. NVIDIA NIM's
+  // "deepseek-ai/deepseek-v4-pro"), so only skip prefixing when the ref
+  // already starts with the provider segment.
+  if (value.startsWith(`${provider}/`)) return value
   return `${provider}/${value}`
 }
