@@ -342,6 +342,8 @@ export function createProvider(provider, { apiKey }) {
       return new OpenAICompatibleProvider({ apiKey, provider: 'glm', defaultBase: NVIDIA_BASE_URL })
     case 'kimi':
       return new OpenAICompatibleProvider({ apiKey, provider: 'kimi', defaultBase: NVIDIA_BASE_URL })
+    case 'nvidia':
+      return new OpenAICompatibleProvider({ apiKey, provider: 'nvidia', defaultBase: NVIDIA_BASE_URL })
     default:
       throw new Error(`Proveedor no soportado: ${provider}`)
   }

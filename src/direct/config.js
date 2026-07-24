@@ -1,11 +1,12 @@
 import Conf from 'conf'
 
-export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi'])
-const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi'])
+export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'nvidia'])
+const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'nvidia'])
 
 // Providers hosted behind NVIDIA NIM's universal OpenAI-compatible endpoint.
 // A single NVIDIA_API_KEY unlocks all of them, so it's a shared fallback key.
-const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek'])
+// 'nvidia' is the generic passthrough ("your favorite model") — any catalog model.
+const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek', 'nvidia'])
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
 const DEFAULT_MODELS = Object.freeze({
@@ -16,6 +17,7 @@ const DEFAULT_MODELS = Object.freeze({
   minimax: 'MiniMax-M3',
   glm: 'z-ai/glm-5.2',
   kimi: 'moonshotai/kimi-k2.6',
+  nvidia: 'z-ai/glm-5.2',
 })
 
 const store = new Conf({
@@ -42,6 +44,9 @@ export function normalizeProvider(provider) {
   }
   if (value === 'kimi' || value === 'moonshot' || value === 'moonshotai') {
     return 'kimi'
+  }
+  if (value === 'nvidia' || value === 'nim') {
+    return 'nvidia'
   }
 
   throw new Error(
@@ -177,11 +182,20 @@ export function saveBaseUrl(provider, baseUrl) {
 export function getBaseUrl(provider = getActiveProvider()) {
   const normalized = normalizeProvider(provider)
 
-  return (
+  const explicit =
     process.env[baseUrlEnvKey(normalized)] ||
     store.get(`baseUrls.${normalized}`) ||
     ''
-  )
+  if (explicit) return explicit
+
+  // NVIDIA-only providers (glm/kimi/nvidia) default to NVIDIA NIM's universal
+  // endpoint so their model list and requests work with just the shared key —
+  // no manual base URL needed. DeepSeek is excluded: it defaults to its own
+  // official endpoint unless the user points it elsewhere.
+  if (normalized === 'glm' || normalized === 'kimi' || normalized === 'nvidia') {
+    return NVIDIA_BASE_URL
+  }
+  return ''
 }
 
 export function clearBaseUrl(provider) {
@@ -287,6 +301,8 @@ function envKeyForProvider(provider) {
       return 'GLM_API_KEY'
     case 'kimi':
       return 'KIMI_API_KEY'
+    case 'nvidia':
+      return 'NVIDIA_API_KEY'
     default:
       return ''
   }
@@ -308,6 +324,8 @@ function baseUrlEnvKey(provider) {
       return 'GLM_BASE_URL'
     case 'kimi':
       return 'KIMI_BASE_URL'
+    case 'nvidia':
+      return 'NVIDIA_BASE_URL'
     default:
       return ''
   }

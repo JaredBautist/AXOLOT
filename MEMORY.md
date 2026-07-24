@@ -30,10 +30,20 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - `fetchWithRetry` requiere parámetro `url` obligatorio
 
 ## Providers
-- Claude, OpenAI, DeepSeek, Gemini, MiniMax — todos beneficiados por igual de cambios en prompts
+- Claude, OpenAI, DeepSeek, Gemini, MiniMax, GLM, Kimi, NVIDIA — todos beneficiados por igual de cambios en prompts
 - DeepSeek thinking configurable via `DEEPSEEK_THINKING` env var
 - MiniMax keepalive: false en todas las peticiones fetch
 - Gemini transient errors: RESOURCE_EXHAUSTED, UNAVAILABLE, DEADLINE_EXCEEDED, INTERNAL
+
+### NVIDIA NIM (GLM / Kimi / NVIDIA "your favorite model") — 24 Jul 2026
+- Endpoint universal `https://integrate.api.nvidia.com/v1`: UNA nvapi- key desbloquea 100+ modelos
+- `NVIDIA_HOSTED = ['glm','kimi','deepseek','nvidia']` comparten la key vía `sharedNvidiaKey()` (prefiere `NVIDIA_API_KEY`, si no cualquier sibling)
+- El endpoint devuelve UN catálogo compartido para todo provider → causa raíz del bug del picker (DeepSeek mostraba los 118 modelos)
+- Fix picker: filtro por keywords por provider (`PROVIDER_MODEL_KEYWORDS`) + orden newest-first (`localeCompare numeric`); glm/kimi/deepseek muestran solo lo suyo
+- **Item 8 "Your favorite model"** = provider `nvidia` genérico (top-level, después de Kimi): passthrough de CUALQUIER modelo del catálogo, sin filtro de keyword (`keywords=null`)
+- Defaults más recientes: GLM `z-ai/glm-5.2`, Kimi `moonshotai/kimi-k2.6` (verificados en build.nvidia.com)
+- Model refs con `/` (org prefix): `setDirectModel` parte en el PRIMER `/`, preserva resto con `modelParts.join('/')`
+- `getBaseUrl`: glm/kimi/nvidia default a NVIDIA_BASE_URL; DeepSeek NO (usa api.deepseek.com oficial)
 
 ## Smart Defaults
 - `AXOLOT_AUTO_NATIVE=1` activa auto-selección de provider nativo

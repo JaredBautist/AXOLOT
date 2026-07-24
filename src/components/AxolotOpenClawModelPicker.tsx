@@ -79,6 +79,10 @@ const AUTH_URLS: Record<string, { login: string; label: string }> = {
     login: 'https://build.nvidia.com/',
     label: 'build.nvidia.com (NVIDIA key)',
   },
+  nvidia: {
+    login: 'https://build.nvidia.com/',
+    label: 'build.nvidia.com (NVIDIA key)',
+  },
 }
 
 const providerOptions = [
@@ -129,6 +133,13 @@ const providerOptions = [
     label: 'Kimi (Moonshot)',
     description: 'Kimi via NVIDIA NIM, e.g. moonshotai/kimi-k2.6. Uses your NVIDIA key.',
     placeholder: 'moonshotai/kimi-k2.6',
+    hasOAuth: false,
+  },
+  {
+    id: 'nvidia',
+    label: 'Your favorite model (any NVIDIA model)',
+    description: 'Browse the full NVIDIA NIM catalog (100+ models). Uses your NVIDIA key.',
+    placeholder: 'z-ai/glm-5.2',
     hasOAuth: false,
   },
 ] as const
@@ -361,6 +372,7 @@ export function AxolotOpenClawModelPicker({
     if (provider.id === 'minimax') return 'info'
     if (provider.id === 'glm') return 'success'
     if (provider.id === 'kimi') return 'warning'
+    if (provider.id === 'nvidia') return 'success'
     return 'permission'
   }
 
@@ -385,6 +397,7 @@ export function AxolotOpenClawModelPicker({
     else if (provider.id === 'minimax') process.env.MINIMAX_API_KEY = credentials
     else if (provider.id === 'glm') process.env.GLM_API_KEY = credentials
     else if (provider.id === 'kimi') process.env.KIMI_API_KEY = credentials
+    else if (provider.id === 'nvidia') process.env.NVIDIA_API_KEY = credentials
     else if (provider.id === 'claude') {
       if (type === 'oauth') {
         process.env.ANTHROPIC_AUTH_TOKEN = credentials
@@ -964,15 +977,24 @@ export function AxolotOpenClawModelPicker({
     // provider. Filter it to just this provider's family, then sort newest-first
     // (numeric-aware) so the latest version — e.g. glm-5.2 over glm-4.6 — is the
     // top pick. "Browse all" reveals the untouched catalog.
-    const keywords = PROVIDER_MODEL_KEYWORDS[current.id] || [current.id]
-    const familyModels = fullCatalog
-      ? fullCatalog.filter(id => {
-          const lower = id.toLowerCase()
-          return keywords.some(k => lower.includes(k))
-        })
-      : null
+    // The "nvidia" provider ("your favorite model") is the deliberate all-models
+    // view, so it never filters. Others filter to their own family.
+    const keywords =
+      current.id === 'nvidia'
+        ? null
+        : PROVIDER_MODEL_KEYWORDS[current.id] || [current.id]
+    const familyModels =
+      fullCatalog && keywords
+        ? fullCatalog.filter(id => {
+            const lower = id.toLowerCase()
+            return keywords.some(k => lower.includes(k))
+          })
+        : null
     const hasExtraModels = Boolean(
-      fullCatalog && familyModels && fullCatalog.length > familyModels.length,
+      fullCatalog &&
+        familyModels &&
+        familyModels.length > 0 &&
+        fullCatalog.length > familyModels.length,
     )
     // Default to the filtered family; if the filter matched nothing (unfamiliar
     // naming), fall back to the full catalog so the user is never stranded.
@@ -1077,7 +1099,7 @@ export function AxolotOpenClawModelPicker({
             )}
             {endpointModels && (
               <Text dimColor>
-                {browseAll
+                {browseAll || current.id === 'nvidia' || !familyModels
                   ? `Showing all ${endpointModels.length} models from ${endpointHost}.`
                   : `Showing ${endpointModels.length} ${current.label} model${
                       endpointModels.length === 1 ? '' : 's'

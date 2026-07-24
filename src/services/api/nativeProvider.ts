@@ -39,7 +39,7 @@ const nativeToolSchemaCache = new Map<
   Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }>
 >()
 
-type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi'
+type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'nvidia'
 
 // GLM (Zhipu) and Kimi (Moonshot) default to NVIDIA NIM's universal, OpenAI-
 // compatible endpoint — one nvapi- key unlocks many models.
@@ -95,10 +95,17 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: 'kimi', model: raw.slice('kimi/'.length) }
   }
 
+  // "nvidia/<org>/<model>" — the universal NVIDIA NIM passthrough ("your
+  // favorite model"): any model in the catalog, routed to NVIDIA as-is.
+  if (lower.startsWith('nvidia/')) {
+    return { provider: 'nvidia', model: raw.slice('nvidia/'.length) }
+  }
+
   const envProvider = process.env.AXOLOT_NATIVE_PROVIDER?.toLowerCase()
   if (
     envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' ||
-    envProvider === 'minimax' || envProvider === 'glm' || envProvider === 'kimi'
+    envProvider === 'minimax' || envProvider === 'glm' || envProvider === 'kimi' ||
+    envProvider === 'nvidia'
   ) {
     return { provider: envProvider, model: raw }
   }
@@ -241,7 +248,7 @@ export async function* queryNativeProvider({
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
-    } else if (route.provider === 'glm' || route.provider === 'kimi') {
+    } else if (route.provider === 'glm' || route.provider === 'kimi' || route.provider === 'nvidia') {
       for await (const event of streamNvidiaHosted(route.provider, route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
@@ -298,7 +305,7 @@ export async function* queryNativeProvider({
 
 // Providers hosted behind NVIDIA NIM's universal endpoint — one nvapi- key
 // unlocks all of them, so they share NVIDIA_API_KEY (and each other's stored key).
-const NVIDIA_HOSTED = ['glm', 'kimi', 'deepseek']
+const NVIDIA_HOSTED = ['glm', 'kimi', 'deepseek', 'nvidia']
 
 function sharedNvidiaKey(): string {
   const env = process.env.NVIDIA_API_KEY
@@ -317,6 +324,7 @@ function storeApiKey(provider: string): string {
     provider === 'minimax' ? 'MINIMAX_API_KEY' :
     provider === 'glm' ? 'GLM_API_KEY' :
     provider === 'kimi' ? 'KIMI_API_KEY' :
+    provider === 'nvidia' ? 'NVIDIA_API_KEY' :
     'GEMINI_API_KEY'
   const raw =
     process.env[envVar] ||
@@ -339,6 +347,7 @@ function storeBaseUrl(provider: string): string {
     provider === 'minimax' ? 'MINIMAX_BASE_URL' :
     provider === 'glm' ? 'GLM_BASE_URL' :
     provider === 'kimi' ? 'KIMI_BASE_URL' :
+    provider === 'nvidia' ? 'NVIDIA_BASE_URL' :
     'GEMINI_BASE_URL'
   const value =
     process.env[envVar] ||
@@ -768,7 +777,7 @@ async function* streamDeepSeek(
 // Same shape as streamDeepSeek minus the DeepSeek-only `thinking` extra_body;
 // base URL defaults to NVIDIA's universal endpoint but honors a custom override.
 async function* streamNvidiaHosted(
-  provider: 'glm' | 'kimi',
+  provider: 'glm' | 'kimi' | 'nvidia',
   model: string,
   messages: Message[],
   systemPrompt: SystemPrompt,
@@ -1470,7 +1479,7 @@ async function buildNativeToolSchemasUncached(
 
 function nativeSystemPrompt(
   systemPrompt: SystemPrompt,
-  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi',
+  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'nvidia',
   messages: Message[] = [],
   model = '',
 ): string {
@@ -1480,6 +1489,7 @@ function nativeSystemPrompt(
     provider === 'minimax' ? 'MiniMax' :
     provider === 'glm' ? 'GLM' :
     provider === 'kimi' ? 'Kimi' :
+    provider === 'nvidia' ? 'NVIDIA' :
     'Gemini'
   const poweredBy = model ? `${providerName} (model: ${model})` : providerName
   const identity = [
