@@ -70,6 +70,8 @@ axolot                    # Open the TUI
 axolot chat "prompt"      # One-shot query, no TUI
 axolot auth <provider>    # Configure API key
 axolot use <provider> <model>  # Switch model
+axolot sessions           # 🕘 Recent session history (this folder)
+axolot sessions --all     # History across every project
 axolot -p openai -m gpt-5.6 chat "hi"  # Override
 ```
 

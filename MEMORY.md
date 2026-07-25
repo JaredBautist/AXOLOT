@@ -60,6 +60,14 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - Model refs con `/` (org prefix): `setDirectModel` parte en el PRIMER `/`, preserva resto con `modelParts.join('/')`
 - `getBaseUrl`: glm/kimi/minimax/nvidia default a NVIDIA_BASE_URL; DeepSeek NO (usa api.deepseek.com oficial)
 
+## `axolot sessions` / `--sessions` (historial de sesiones) — 25 Jul 2026
+- Comando y flag global en `src/direct/chat.js` (`sessions`/alias `history`, y `--sessions`/`--all`)
+- Lee transcripts JSONL del motor en `<runtimeConfigDir>/projects/<cwd-sanitizado>/*.jsonl` donde `runtimeConfigDir = ~/.config/axolot/axolot-runtime` (mismo dir que se pasa como `CLAUDE_CONFIG_DIR` al spawnear la TUI, chat.js:262/416)
+- **sanitizePath replicado en JS**: `dir.replace(/[^a-zA-Z0-9]/g,'-')` (igual que `sanitizePath` en `sessionStoragePortable.ts`) para mapear cwd → project dir
+- Por defecto muestra solo la carpeta actual; `--all` lista todos los proyectos. Orden newest-first por `mtimeMs`
+- Título = primer mensaje de usuario REAL (salta `isMeta`, `<local-command…>`, `<command-name>`, `<command-message>`, `Caveat:`); no hay líneas `type:"summary"` en estos transcripts
+- Muestra: tiempo relativo, nº de mensajes (user+assistant), título, sessionId (y cwd con `--all`)
+
 ## Smart Defaults
 - `AXOLOT_AUTO_NATIVE=1` activa auto-selección de provider nativo
 - `AXOLOT_BUDGET_MODE` = cost/speed/balanced/quality

@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,11 +52,18 @@ program
     '--dangerously-skip-permissions',
     'skip ALL permission prompts (dangerous — full bypass mode)',
   )
+  .option('--sessions', 'show recent session history and exit')
+  .option('--all', 'with --sessions: list sessions from every project')
   .action(async (promptParts, options) => {
     const yolo =
       options.yolo ||
       options.dangerouslySkipPermissions ||
       process.env.AXOLOT_YOLO === '1'
+
+    if (options.sessions) {
+      printSessions({ all: Boolean(options.all) })
+      return
+    }
 
     if (promptParts.length === 0 && process.stdin.isTTY) {
       await launchTui({ yolo })
@@ -111,6 +125,20 @@ program
     if (model) setDefaultModel(provider, model)
     console.log(`Active provider: ${getActiveProvider()}`)
     console.log(`Default model: ${getDefaultModel()}`)
+  })
+
+program
+  .command('sessions')
+  .alias('history')
+  .description('List recent Axolot sessions (most recent first)')
+  .option('-a, --all', 'list sessions from every project, not just this folder')
+  .option('-n, --limit <n>', 'max number of sessions to show', '20')
+  .action(options => {
+    const limit = Number.parseInt(options.limit, 10)
+    printSessions({
+      all: Boolean(options.all),
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 20,
+    })
   })
 
 program
@@ -417,6 +445,172 @@ function getRuntimeConfigDir() {
   const configRoot =
     process.env.XDG_CONFIG_HOME || resolve(homedir(), '.config')
   return resolve(configRoot, 'axolot', 'axolot-runtime')
+}
+
+// Mirror the engine's transcript layout: sessions live as JSONL files under
+// <runtimeConfigDir>/projects/<sanitized-cwd>/<sessionId>.jsonl. The engine
+// sanitizes a directory path by replacing every non-alphanumeric char with '-'
+// (see sanitizePath in sessionStoragePortable.ts) — replicate that here so we
+// can map the current folder back to its project directory.
+function sanitizeProjectPath(dir) {
+  return String(dir).replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+function getProjectsRoot() {
+  return resolve(getRuntimeConfigDir(), 'projects')
+}
+
+// Pull a human-friendly title from a transcript: the first genuine user message,
+// skipping the meta/command/caveat noise the TUI injects at the top.
+function readSessionMeta(filePath) {
+  let raw = ''
+  try {
+    raw = readFileSync(filePath, 'utf8')
+  } catch {
+    return null
+  }
+  const lines = raw.split('\n').filter(Boolean)
+  let title = ''
+  let cwd = ''
+  let messages = 0
+  let sessionId = ''
+
+  for (const line of lines) {
+    let entry
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (!sessionId && entry.sessionId) sessionId = entry.sessionId
+    if (!cwd && entry.cwd) cwd = entry.cwd
+    if (entry.type === 'user' || entry.type === 'assistant') messages += 1
+
+    if (!title && entry.type === 'user' && !entry.isMeta && entry.message) {
+      let content = entry.message.content
+      if (Array.isArray(content)) {
+        content = content
+          .map(part => (typeof part === 'string' ? part : part?.text || ''))
+          .join(' ')
+      }
+      content = String(content || '').replace(/\s+/g, ' ').trim()
+      const noise =
+        content.startsWith('<local-command') ||
+        content.startsWith('<command-name') ||
+        content.startsWith('<command-message') ||
+        content.startsWith('<command-args') ||
+        content.startsWith('Caveat:')
+      if (content && !noise) title = content
+    }
+  }
+
+  return { title, cwd, messages, sessionId }
+}
+
+// "2m ago", "3h ago", "yesterday", "5d ago", or a date for older sessions.
+function formatRelativeTime(then, now) {
+  const diff = Math.max(0, now - then)
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hours = Math.floor(min / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(then).toISOString().slice(0, 10)
+}
+
+function collectSessions({ all }) {
+  const root = getProjectsRoot()
+  if (!existsSync(root)) return []
+
+  const currentProject = sanitizeProjectPath(process.cwd())
+  let projectDirs
+  try {
+    projectDirs = readdirSync(root, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name)
+  } catch {
+    return []
+  }
+
+  if (!all) {
+    projectDirs = projectDirs.filter(name => name === currentProject)
+  }
+
+  const sessions = []
+  for (const name of projectDirs) {
+    const dir = resolve(root, name)
+    let files
+    try {
+      files = readdirSync(dir).filter(f => f.endsWith('.jsonl'))
+    } catch {
+      continue
+    }
+    for (const file of files) {
+      const filePath = resolve(dir, file)
+      let stat
+      try {
+        stat = statSync(filePath)
+      } catch {
+        continue
+      }
+      if (!stat.size) continue
+      const meta = readSessionMeta(filePath)
+      if (!meta || meta.messages === 0) continue
+      sessions.push({
+        mtime: stat.mtimeMs,
+        id: meta.sessionId || file.replace(/\.jsonl$/, ''),
+        title: meta.title || '(no messages)',
+        cwd: meta.cwd || '',
+        messages: meta.messages,
+      })
+    }
+  }
+
+  sessions.sort((a, b) => b.mtime - a.mtime)
+  return sessions
+}
+
+function printSessions({ all = false, limit = 20 } = {}) {
+  const now = Date.now()
+  const sessions = collectSessions({ all })
+
+  if (sessions.length === 0) {
+    if (all) {
+      console.log('No sessions found yet. Start one with: axolot')
+    } else {
+      console.log('No sessions found in this folder.')
+      console.log('Tip: run `axolot sessions --all` to see every project.')
+    }
+    return
+  }
+
+  const shown = sessions.slice(0, limit)
+  const scope = all ? 'all projects' : process.cwd()
+  console.log('')
+  console.log(`  Recent Axolot sessions — ${scope}`)
+  console.log('')
+
+  shown.forEach((s, i) => {
+    const num = String(i + 1).padStart(2, ' ')
+    const when = formatRelativeTime(s.mtime, now).padEnd(12, ' ')
+    const count = `${s.messages} msg`.padStart(7, ' ')
+    const title = s.title.length > 60 ? `${s.title.slice(0, 59)}…` : s.title
+    console.log(`  ${num}  ${when}  ${count}  ${title}`)
+    if (all && s.cwd) console.log(`      ${s.cwd}`)
+    console.log(`      id: ${s.id}`)
+  })
+
+  console.log('')
+  if (sessions.length > shown.length) {
+    console.log(
+      `  … ${sessions.length - shown.length} more. Use --limit <n> to show more.`,
+    )
+  }
+  console.log('  Open the TUI with `axolot`, then `/resume` to continue a session.')
+  console.log('')
 }
 
 async function promptForApiKey(provider) {
