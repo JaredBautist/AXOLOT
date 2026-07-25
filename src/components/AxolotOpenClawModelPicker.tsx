@@ -89,22 +89,22 @@ const providerOptions = [
   {
     id: 'claude',
     label: 'Anthropic',
-    description: 'Anthropic API models, e.g. Sonnet.',
-    placeholder: 'claude-sonnet-4-5',
+    description: 'Anthropic API models, e.g. claude-sonnet-5 or claude-opus-5.',
+    placeholder: 'claude-sonnet-5',
     hasOAuth: true,
   },
   {
     id: 'openai',
     label: 'OpenAI',
-    description: 'OpenAI models, e.g. gpt-4o.',
-    placeholder: 'gpt-4o',
+    description: 'OpenAI models, e.g. gpt-5.6 or gpt-5.5.',
+    placeholder: 'gpt-5.6',
     hasOAuth: true,
   },
   {
     id: 'gemini',
     label: 'Google Gemini',
-    description: 'Gemini API models, e.g. gemini-2.5-pro.',
-    placeholder: 'gemini-2.5-pro',
+    description: 'Gemini API models, e.g. gemini-3.1-pro or gemini-3.6-flash.',
+    placeholder: 'gemini-3.1-pro',
     hasOAuth: false,
   },
   {

@@ -32,13 +32,15 @@ axolot
 
 ## Features
 
-**Multi-Provider** — Anthropic, OpenAI, Gemini, DeepSeek, and MiniMax. Switch anytime with `/model`.
+**Multi-Provider** — Anthropic, OpenAI, Gemini, DeepSeek, MiniMax, GLM, Kimi, and NVIDIA NIM (bring your own model). Switch anytime with `/model`.
 
 ```bash
-axolot use anthropic sonnet
-axolot use openai gpt-4o
-axolot use gemini gemini-2.5-pro
+axolot use anthropic claude-sonnet-5
+axolot use openai gpt-5.6
+axolot use gemini gemini-3.1-pro
 ```
+
+**⭐ Your favorite model** — Pick option 8 in `/model` (NVIDIA NIM). One `nvapi-` key unlocks 100+ models from the shared catalog — run any of them by name, no per-provider setup.
 
 **30+ Built-in Skills** — Invoke with `/<skill-name>`. The model auto-selects them based on your task.
 
@@ -72,7 +74,7 @@ axolot                    # Open the TUI
 axolot chat "prompt"      # One-shot query, no TUI
 axolot auth <provider>    # Configure API key
 axolot use <provider> <model>  # Switch model
-axolot -p openai -m gpt-4o-mini chat "hi"  # Override
+axolot -p openai -m gpt-5.6 chat "hi"  # Override
 ```
 
 ### Inside the TUI
@@ -119,9 +121,16 @@ export GEMINI_API_KEY="..."
 
 | Provider | Models | Auth |
 |----------|--------|------|
-| Anthropic | Sonnet, Opus, Haiku | API key / OAuth |
-| OpenAI | GPT-4o, GPT-4o-mini, GPT-5.x | API key / OAuth |
-| Google Gemini | Gemini 2.5 Pro, Gemini 2.5 Flash | API key |
+| Anthropic | Opus 5, Sonnet 5, Haiku 4.5, Fable 5 | API key / OAuth |
+| OpenAI | GPT-5.6 (Sol · Terra · Luna), GPT-5.5 | API key / OAuth |
+| Google Gemini | Gemini 3.1 Pro, Gemini 3.6 Flash, 3.5 Flash-Lite | API key |
+| DeepSeek | DeepSeek V4, V4-Flash | API key |
+| MiniMax | MiniMax-M3 | API key |
+| GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | NVIDIA key |
+| Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | NVIDIA key |
+| ⭐ Your favorite model *(NVIDIA NIM)* | Any of 100+ catalog models (option 8) | NVIDIA key |
+
+> One `nvapi-` key from [build.nvidia.com](https://build.nvidia.com) is shared across GLM, Kimi, and the "your favorite model" passthrough — connect once, run 100+ models.
 
 ## Development
 

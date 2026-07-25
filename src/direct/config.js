@@ -10,9 +10,9 @@ const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek', 'nvidia'])
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
 const DEFAULT_MODELS = Object.freeze({
-  claude: 'claude-3-5-sonnet-latest',
-  openai: 'gpt-5.5',
-  gemini: 'gemini-2.5-pro',
+  claude: 'claude-sonnet-5',
+  openai: 'gpt-5.6',
+  gemini: 'gemini-3.1-pro',
   deepseek: 'deepseek-v4-flash',
   minimax: 'MiniMax-M3',
   glm: 'z-ai/glm-5.2',
