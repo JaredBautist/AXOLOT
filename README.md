@@ -57,6 +57,8 @@ axolot use gemini gemini-3.1-pro
 
 **💾 Session Persistence** — Save and restore session state across terminal sessions with `/session save` and `/session resume`.
 
+**🕘 Session History** — Browse your recent sessions from the terminal with `axolot sessions` (this folder) or `axolot sessions --all` (every project). Shows when each ran, its message count, and the opening prompt — most recent first.
+
 **📝 Custom Instructions** — Add project-specific rules in `.axolot/instructions/`. They load every turn automatically.
 
 **🧠 Adaptive Learning** — Axolot learns your preferences over time. Use `/learn` to manage memory, skill preferences, and suggestions.
