@@ -119,16 +119,35 @@ export function buildNativeProviderPromptModule(provider: NativePromptProvider):
 export function shouldIncludeNativeFrontendPrompt(taskType: TaskType, messages: Message[]): boolean {
   if (taskType === 'frontend') return true
   const text = getLastUserText(messages).toLowerCase()
-  return /\b(ui|ux|frontend|react|component|css|html|tailwind|style|layout|responsive|design|tui|logo|branding)\b/.test(text)
+  return /\b(ui|ux|frontend|front-end|react|vue|svelte|angular|next\.?js|component|css|scss|html|tailwind|style|styling|layout|responsive|design|redesign|theme|dashboard|landing|website|web ?page|page|hero|navbar|modal|button|form|card|animation|animate|transition|svg|figma|tui|logo|branding)\b/.test(text)
 }
 
 export function buildNativeFrontendPromptModule(): string {
   return [
-    '## Frontend Quality Gate',
-    '- For frontend work, invoke/apply the relevant frontend skill before writing code.',
-    '- Produce complete, accessible, responsive code with loading, empty, error, hover, focus, disabled, and reduced-motion states where applicable.',
-    '- Use semantic HTML and CSS variables; avoid inline styles, generic AI-looking layouts, and hardcoded trendy palettes.',
-    '- For this Axolot repo specifically: do not change TUI branding, logos, mascots, ASCII art, or visual layout unless explicitly authorized by the user.',
+    '## Frontend Design Bar — Distinctive, Production-Grade UI',
+    'Treat every interface as a design opportunity. Generic, templated "AI slop" output is a failure. Aim for the quality bar of a senior product designer who commits fully to a vision.',
+    '',
+    '### Decide before you code',
+    '- Commit to ONE bold aesthetic direction (e.g. refined-minimal, editorial/magazine, brutalist, retro-futuristic, organic, luxury, playful). Intentionality beats intensity.',
+    '- Name the single memorable detail that makes this interface unforgettable, then build toward it.',
+    '',
+    '### Execution standards',
+    '- Typography: choose characterful, high-quality fonts and a real type scale. NEVER default to Inter/Roboto/Arial/system stacks or reflexively reach for Space Grotesk. Pair a distinctive display font with a clean body font.',
+    '- Color & theme: commit to a cohesive palette via CSS variables. A dominant color with sharp accents beats a timid, evenly-spread palette. Avoid the purple-gradient-on-white cliché.',
+    '- Layout & space: deliberate visual hierarchy; generous negative space or controlled density; unexpected composition (asymmetry, overlap, grid-breaking) when it serves the concept — not decoration for its own sake.',
+    '- Motion: one well-orchestrated page load with staggered reveals, plus purposeful hover/focus micro-interactions. CSS-first for plain HTML; the Motion library for React when available. Always honor prefers-reduced-motion.',
+    '- Depth & atmosphere: avoid flat solid fills — layer gradient meshes, subtle noise/grain, soft shadows, textures, or patterns that match the chosen aesthetic.',
+    '',
+    '### Non-negotiables',
+    '- Semantic, accessible HTML: real labels, visible focus states, sufficient contrast, full keyboard support.',
+    '- Handle every state: loading, empty, error, hover, focus, disabled.',
+    '- Responsive from small mobile to large desktop — no fixed-width desktop-only layouts.',
+    '- Ship production-grade working code: real content, wired-up interactions, no dead buttons or lorem-only stubs.',
+    '- Match code complexity to the vision: maximalist needs rich effects; minimalist needs restraint and pixel-level precision.',
+    '- If a frontend skill fits (/frontend-design, /codex-frontend-master, /v0-frontend), apply its full guidance before writing code.',
+    '',
+    '### Axolot repo guard',
+    '- Do NOT change this repo’s own TUI branding, logos, mascot (the pink axolotl), ASCII art, or visual layout unless the user explicitly authorized that exact visual change.',
   ].join('\n')
 }
 

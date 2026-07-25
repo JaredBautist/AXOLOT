@@ -29,6 +29,13 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - `assertMinVersion()` deshabilitado para Axolot
 - `fetchWithRetry` requiere parámetro `url` obligatorio
 
+## Prompts nativos (TUI, motor `nativeProvider.ts`)
+- `nativeSystemPrompt()` = identidad + prompt estático + módulos dinámicos por tipo de tarea (`nativePromptModules.ts`)
+- Los módulos dinámicos van AL FINAL para no romper el prefix-caching (el prefijo estable identity+static queda byte-idéntico entre turnos)
+- **Frontend design bar INLINE**: `buildNativeFrontendPromptModule()` incrusta la guía concreta de diseño (destilada de `FRONTEND_DESIGN_PROMPT`) directamente en el system prompt. Razón: los modelos no-Claude (glm/kimi/deepseek/gemini) NO invocan skills de forma fiable, así que la barra de calidad debe venir en el prompt, no solo como puntero a la skill
+- Se activa vía `shouldIncludeNativeFrontendPrompt()` (regex de keywords UI); mantiene el guard de NO tocar branding/arte TUI del propio repo
+- `axolot chat` (path directo) es one-shot minimal: solo usa `--system`, no arma system prompt propio
+
 ## Providers
 - Claude, OpenAI, DeepSeek, Gemini, MiniMax, GLM, Kimi, NVIDIA — todos beneficiados por igual de cambios en prompts
 - DeepSeek thinking configurable via `DEEPSEEK_THINKING` env var
