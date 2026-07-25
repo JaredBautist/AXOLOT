@@ -115,8 +115,8 @@ export GEMINI_API_KEY="..."
 |----------|--------|------|
 | 🟣 Anthropic | Opus 5, Sonnet 5, Haiku 4.5, Fable 5 | 🔑 API key / OAuth |
 | 🟢 OpenAI | GPT-5.6 (Sol · Terra · Luna), GPT-5.5 | 🔑 API key / OAuth |
-| 🔵 Google Gemini | Gemini 3.1 Pro, Gemini 3.6 Flash, 3.5 Flash-Lite | 🔑 API key |
-| 🐳 DeepSeek | DeepSeek V4, V4-Flash | 🔑 API key |
+| 🔵 Google Gemini | Gemini 3.1 Pro, Gemini 3.6 Flash, 3.5 Flash-Lite | 🌐 custom base URL + 🔑 API key |
+| 🐳 DeepSeek | DeepSeek V4, V4-Flash | 🌐 custom base URL + 🔑 API key |
 | 🟠 MiniMax | MiniMax-M3 | 🌐 custom base URL + 🔑 API key |
 | 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🌐 custom base URL + 🔑 API key |
 | 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🌐 custom base URL + 🔑 API key |
