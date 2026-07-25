@@ -665,18 +665,26 @@ export function AxolotOpenClawModelPicker({
       })
     }
 
-    actions.push({
-      value: PROVIDER_BACK,
-      label: 'Paste API key',
-      description: `Enter an API key for ${current.label} manually.`,
-    })
-
+    // Already connected: lead with "Pick model" so a stored key never forces a
+    // re-entry. The key persists across sessions (Conf store), and NVIDIA-hosted
+    // providers share one key — so switching glm↔deepseek↔kimi never re-prompts.
     if (isAuthed) {
       actions.push({
         value: PROVIDER_MODEL,
         label: 'Pick model',
         description: 'Already connected. Jump to model selection.',
       })
+    }
+
+    actions.push({
+      value: PROVIDER_BACK,
+      label: isAuthed ? 'Replace API key' : 'Paste API key',
+      description: isAuthed
+        ? `Replace the stored API key for ${current.label}.`
+        : `Enter an API key for ${current.label} manually.`,
+    })
+
+    if (isAuthed) {
       actions.push({
         value: PROVIDER_LOGOUT,
         label: 'Disconnect',
@@ -698,10 +706,10 @@ export function AxolotOpenClawModelPicker({
               />
               <Text dimColor>
                 {isAuthed
-                  ? 'Connected'
+                  ? 'Connected — pick a model, or replace the stored key.'
                   : current.hasOAuth
                     ? 'Sign in with your browser, or paste an API key.'
-                    : `Opening ${authInfo.label} in your browser...`}
+                    : 'Paste your API key below to connect.'}
               </Text>
             </Box>
           </Box>
@@ -717,7 +725,7 @@ export function AxolotOpenClawModelPicker({
             </Box>
           )}
 
-          {current.hasOAuth ? (
+          {current.hasOAuth || isAuthed ? (
             <Select
               options={actions}
               onChange={value => {
