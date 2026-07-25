@@ -142,6 +142,28 @@ program
   })
 
 program
+  .command('resume')
+  .description('Resume a previous session (opens a picker if no id is given)')
+  .argument('[id]', 'session id (see `axolot sessions`), or search term')
+  .option('--yolo', 'skip ALL permission prompts (dangerous — full bypass mode)')
+  .action(async (id, options) => {
+    const yolo = options.yolo || process.env.AXOLOT_YOLO === '1'
+    // `--resume` with no value opens the engine's interactive picker; with an
+    // id it jumps straight into that conversation.
+    const engineArgs = id ? ['--resume', id] : ['--resume']
+    await launchTui({ yolo, engineArgs })
+  })
+
+program
+  .command('continue')
+  .description('Continue the most recent session in this folder')
+  .option('--yolo', 'skip ALL permission prompts (dangerous — full bypass mode)')
+  .action(async options => {
+    const yolo = options.yolo || process.env.AXOLOT_YOLO === '1'
+    await launchTui({ yolo, engineArgs: ['--continue'] })
+  })
+
+program
   .command('chat')
   .description('Send a prompt using native SDK streaming')
   .argument('[prompt...]', 'prompt text')
@@ -263,7 +285,7 @@ function formatError(error) {
   return String(error)
 }
 
-function buildEngineSpawnConfig({ yolo = false } = {}) {
+function buildEngineSpawnConfig({ yolo = false, engineArgs = [] } = {}) {
   const providerName = hasActiveProvider() ? getActiveProvider() : null
   const model = providerName ? getDefaultModel(providerName) : null
   const apiKey = providerName ? getApiKey(providerName) : ''
@@ -363,6 +385,9 @@ function buildEngineSpawnConfig({ yolo = false } = {}) {
     'run',
     resolve(repoRoot, 'src/dev-entry.ts'),
     ...permissionArgs,
+    // Session resume/continue flags (--resume [id], --continue) forwarded to
+    // the engine, which owns the transcript store and the interactive picker.
+    ...engineArgs,
     '--add-dir',
     launchDir,
     '--add-dir',
@@ -383,8 +408,11 @@ function buildEngineSpawnConfig({ yolo = false } = {}) {
   }
 }
 
-async function launchTui({ yolo = false } = {}) {
-  const { bunCommand, args, env, launchDir } = buildEngineSpawnConfig({ yolo })
+async function launchTui({ yolo = false, engineArgs = [] } = {}) {
+  const { bunCommand, args, env, launchDir } = buildEngineSpawnConfig({
+    yolo,
+    engineArgs,
+  })
 
   const result = spawnSync(bunCommand, args, {
     cwd: launchDir,
@@ -609,7 +637,8 @@ function printSessions({ all = false, limit = 20 } = {}) {
       `  … ${sessions.length - shown.length} more. Use --limit <n> to show more.`,
     )
   }
-  console.log('  Open the TUI with `axolot`, then `/resume` to continue a session.')
+  console.log('  Resume one with:  axolot resume <id>')
+  console.log('  Or continue the latest:  axolot continue')
   console.log('')
 }
 

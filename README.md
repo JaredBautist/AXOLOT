@@ -57,7 +57,7 @@ axolot use gemini gemini-3.1-pro
 
 **💾 Session Persistence** — Save and restore session state across terminal sessions with `/session save` and `/session resume`.
 
-**🕘 Session History** — Browse your recent sessions from the terminal with `axolot sessions` (this folder) or `axolot sessions --all` (every project). Shows when each ran, its message count, and the opening prompt — most recent first.
+**🕘 Session History** — Browse your recent sessions from the terminal with `axolot sessions` (this folder) or `axolot sessions --all` (every project). Shows when each ran, its message count, and the opening prompt — most recent first. Jump back in with `axolot resume <id>` (or `axolot continue` for the latest); inside the TUI, `/resume` does the same.
 
 **📝 Custom Instructions** — Add project-specific rules in `.axolot/instructions/`. They load every turn automatically.
 
@@ -74,6 +74,8 @@ axolot auth <provider>    # Configure API key
 axolot use <provider> <model>  # Switch model
 axolot sessions           # 🕘 Recent session history (this folder)
 axolot sessions --all     # History across every project
+axolot resume <id>        # ↩️  Resume a session by id (picker if no id)
+axolot continue           # ↩️  Continue the most recent session
 axolot -p openai -m gpt-5.6 chat "hi"  # Override
 ```
 

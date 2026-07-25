@@ -67,6 +67,7 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - Por defecto muestra solo la carpeta actual; `--all` lista todos los proyectos. Orden newest-first por `mtimeMs`
 - Título = primer mensaje de usuario REAL (salta `isMeta`, `<local-command…>`, `<command-name>`, `<command-message>`, `Caveat:`); no hay líneas `type:"summary"` en estos transcripts
 - Muestra: tiempo relativo, nº de mensajes (user+assistant), título, sessionId (y cwd con `--all`)
+- **Reanudar es accionable**: `axolot resume [id]` y `axolot continue` reenvían `--resume [id]` / `--continue` al engine vía `buildEngineSpawnConfig({engineArgs})` → `launchTui`. Sin id, `--resume` abre el picker interactivo del engine. El engine (main.tsx:1074) ya expone `-r, --resume [value]` y `-c, --continue`; dentro de la TUI el slash `/resume` (`src/commands/resume/`) hace lo mismo
 
 ## Smart Defaults
 - `AXOLOT_AUTO_NATIVE=1` activa auto-selección de provider nativo
