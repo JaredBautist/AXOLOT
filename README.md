@@ -38,7 +38,7 @@ axolot use openai gpt-5.6
 axolot use gemini gemini-3.1-pro
 ```
 
-**⭐ Your favorite model** — Pick option 8 in `/model` (NVIDIA NIM). One `nvapi-` key unlocks 100+ models from the shared catalog — run any of them by name, no per-provider setup.
+**⭐ Your favorite model** — Pick option 8 in `/model` (NVIDIA NIM): one `nvapi-` key unlocks 100+ models from the shared catalog, run any of them by name. Or set a **custom base URL** on any provider to point Axolot at your own OpenAI-compatible endpoint (OpenRouter, a gateway, self-hosted...) — it auto-discovers the available models from `/models`.
 
 **🛠️ 30+ Built-in Skills** — Invoke with `/<skill-name>`. The model auto-selects them based on your task.
 
@@ -120,9 +120,11 @@ export GEMINI_API_KEY="..."
 | 🟠 MiniMax | MiniMax-M3 | 🔑 API key |
 | 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🟩 NVIDIA key |
 | 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🟩 NVIDIA key |
-| ⭐ Your favorite model *(NVIDIA NIM)* | Any of 100+ catalog models (option 8) | 🟩 NVIDIA key |
+| ⭐ Your favorite model *(NVIDIA NIM + custom base URL)* | 100+ NVIDIA catalog models (option 8), or **any** OpenAI-compatible endpoint | 🟩 NVIDIA key / your own |
 
-> One `nvapi-` key from [build.nvidia.com](https://build.nvidia.com) is shared across GLM, Kimi, and the "your favorite model" passthrough — connect once, run 100+ models.
+> 💡 One `nvapi-` key from [build.nvidia.com](https://build.nvidia.com) is shared across GLM, Kimi, and the "your favorite model" passthrough — connect once, run 100+ models.
+>
+> 🌐 **Custom base URL** — any provider can point to your own OpenAI-compatible endpoint (OpenRouter, a gateway, self-hosted, ...). Set it via *Set custom base URL* in `/model`; Axolot auto-discovers models from `/models`.
 
 ## 🧑‍💻 Development
 ```bash
