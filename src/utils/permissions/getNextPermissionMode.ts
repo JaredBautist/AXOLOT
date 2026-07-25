@@ -53,7 +53,16 @@ export function getNextPermissionMode(
       return 'plan'
 
     case 'plan':
-      if (toolPermissionContext.isBypassPermissionsModeAvailable) {
+      // Axolot: expose the accept-all "Auto mode" (bypassPermissions) in the
+      // Shift+Tab cycle for external providers too, not just users who launched
+      // with --dangerously-skip-permissions. Enforcement keys off
+      // mode === 'bypassPermissions' directly (permissions.ts step 2a) and
+      // transitionPermissionMode never throws entering bypass, so it applies
+      // cleanly without the availability flag. Ant behavior is unchanged.
+      if (
+        process.env.USER_TYPE !== 'ant' ||
+        toolPermissionContext.isBypassPermissionsModeAvailable
+      ) {
         return 'bypassPermissions'
       }
       if (canCycleToAuto(toolPermissionContext)) {

@@ -36,6 +36,13 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - Se activa vía `shouldIncludeNativeFrontendPrompt()` (regex de keywords UI); mantiene el guard de NO tocar branding/arte TUI del propio repo
 - `axolot chat` (path directo) es one-shot minimal: solo usa `--system`, no arma system prompt propio
 
+## Permission modes / "Auto mode" (Shift+Tab)
+- Ciclo externo (no-ant): default → acceptEdits → plan → **bypassPermissions** → default
+- **"Auto mode" = el modo `bypassPermissions` re-etiquetado** (title 'Auto mode', shortTitle 'Auto', color 'warning') en `PermissionMode.ts`. El enum interno sigue siendo `bypassPermissions`; solo cambia la etiqueta visible → status line muestra "auto mode on"
+- El `auto` real (con clasificador de riesgo) está tras `feature('TRANSCRIPT_CLASSIFIER')`, apagado para externos y atado a infra Anthropic → NO usable. Por eso se reusa bypass
+- `getNextPermissionMode.ts` case 'plan': para externos (`USER_TYPE !== 'ant'`) siempre devuelve `bypassPermissions` (sin requerir `--dangerously-skip-permissions`). Funciona porque: enforcement `permissions.ts:1269` concede allow con solo `mode === 'bypassPermissions'` (sin checar `isBypassPermissionsModeAvailable`), y `transitionPermissionMode` nunca lanza al entrar a bypass (solo lanza para `toMode==='auto'`)
+- NO tocar `AutoModeOptInDialog.tsx` (copy legal, atado al clasificador real)
+
 ## Providers
 - Claude, OpenAI, DeepSeek, Gemini, MiniMax, GLM, Kimi, NVIDIA — todos beneficiados por igual de cambios en prompts
 - DeepSeek thinking configurable via `DEEPSEEK_THINKING` env var

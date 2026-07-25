@@ -64,10 +64,13 @@ const PERMISSION_MODE_CONFIG: Partial<
     external: 'acceptEdits',
   },
   bypassPermissions: {
-    title: 'Bypass Permissions',
-    shortTitle: 'Bypass',
+    // Axolot: surfaced as "Auto mode" — a reachable hands-off accept-all mode
+    // for our providers (glm/kimi/deepseek/nvidia). Enforcement still keys off
+    // the enum value 'bypassPermissions'; only the display label changes.
+    title: 'Auto mode',
+    shortTitle: 'Auto',
     symbol: '⏵⏵',
-    color: 'error',
+    color: 'warning',
     external: 'bypassPermissions',
   },
   dontAsk: {
