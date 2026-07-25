@@ -117,7 +117,7 @@ export GEMINI_API_KEY="..."
 | 🟢 OpenAI | GPT-5.6 (Sol · Terra · Luna), GPT-5.5 | 🔑 API key / OAuth |
 | 🔵 Google Gemini | Gemini 3.1 Pro, Gemini 3.6 Flash, 3.5 Flash-Lite | 🌐 custom base URL + 🔑 API key |
 | 🐳 DeepSeek | DeepSeek V4, V4-Flash | 🌐 custom base URL + 🔑 API key |
-| 🟠 MiniMax | MiniMax-M3 | 🌐 custom base URL + 🔑 API key |
+| 🟠 MiniMax *(via NVIDIA NIM)* | minimaxai/minimax-m3 | 🌐 custom base URL + 🔑 API key |
 | 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🌐 custom base URL + 🔑 API key |
 | 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🌐 custom base URL + 🔑 API key |
 | ⭐ Your favorite model | **Any** OpenAI-compatible endpoint (option 8) | 🌐 custom base URL + 🔑 API key |

@@ -244,9 +244,21 @@ export async function* queryNativeProvider({
         else yield event.event
       }
     } else if (route.provider === 'minimax') {
-      for await (const event of streamMiniMax(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
-        if (event.type === 'tool_calls') toolCalls = event.toolCalls
-        else yield event.event
+      // MiniMax runs over NVIDIA NIM by default (shared nvapi- key, minimaxai/*
+      // model ids) just like GLM/Kimi. Fall back to the bespoke native
+      // minimax.io streamer only when the user explicitly points the base URL
+      // back at MiniMax's own API.
+      const miniBase = storeBaseUrl('minimax')
+      if (/minimaxi?\.(io|com|chat)/i.test(miniBase)) {
+        for await (const event of streamMiniMax(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
+          if (event.type === 'tool_calls') toolCalls = event.toolCalls
+          else yield event.event
+        }
+      } else {
+        for await (const event of streamNvidiaHosted('minimax', route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
+          if (event.type === 'tool_calls') toolCalls = event.toolCalls
+          else yield event.event
+        }
       }
     } else if (route.provider === 'glm' || route.provider === 'kimi' || route.provider === 'nvidia') {
       for await (const event of streamNvidiaHosted(route.provider, route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
@@ -305,7 +317,7 @@ export async function* queryNativeProvider({
 
 // Providers hosted behind NVIDIA NIM's universal endpoint — one nvapi- key
 // unlocks all of them, so they share NVIDIA_API_KEY (and each other's stored key).
-const NVIDIA_HOSTED = ['glm', 'kimi', 'deepseek', 'nvidia']
+const NVIDIA_HOSTED = ['glm', 'kimi', 'deepseek', 'minimax', 'nvidia']
 
 function sharedNvidiaKey(): string {
   const env = process.env.NVIDIA_API_KEY
@@ -777,7 +789,7 @@ async function* streamDeepSeek(
 // Same shape as streamDeepSeek minus the DeepSeek-only `thinking` extra_body;
 // base URL defaults to NVIDIA's universal endpoint but honors a custom override.
 async function* streamNvidiaHosted(
-  provider: 'glm' | 'kimi' | 'nvidia',
+  provider: 'glm' | 'kimi' | 'nvidia' | 'minimax',
   model: string,
   messages: Message[],
   systemPrompt: SystemPrompt,

@@ -48,6 +48,7 @@ const PROVIDER_MODEL_KEYWORDS: Record<string, string[]> = {
   deepseek: ['deepseek'],
   glm: ['glm', 'z-ai', 'zai', 'zhipu'],
   kimi: ['kimi', 'moonshot'],
+  minimax: ['minimax'],
 }
 
 const AUTH_URLS: Record<string, { login: string; label: string }> = {
@@ -68,8 +69,8 @@ const AUTH_URLS: Record<string, { login: string; label: string }> = {
     label: 'platform.deepseek.com',
   },
   minimax: {
-    login: 'https://platform.minimaxi.com/',
-    label: 'platform.minimaxi.com',
+    login: 'https://build.nvidia.com/',
+    label: 'build.nvidia.com (NVIDIA key)',
   },
   glm: {
     login: 'https://build.nvidia.com/',
@@ -117,8 +118,8 @@ const providerOptions = [
   {
     id: 'minimax',
     label: 'MiniMax',
-    description: 'MiniMax API models, e.g. MiniMax-M3.',
-    placeholder: 'MiniMax-M3',
+    description: 'MiniMax via NVIDIA NIM, e.g. minimaxai/minimax-m3. Uses your NVIDIA key.',
+    placeholder: 'minimaxai/minimax-m3',
     hasOAuth: false,
   },
   {

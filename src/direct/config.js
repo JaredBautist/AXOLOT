@@ -6,7 +6,7 @@ const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deeps
 // Providers hosted behind NVIDIA NIM's universal OpenAI-compatible endpoint.
 // A single NVIDIA_API_KEY unlocks all of them, so it's a shared fallback key.
 // 'nvidia' is the generic passthrough ("your favorite model") — any catalog model.
-const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek', 'nvidia'])
+const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek', 'minimax', 'nvidia'])
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
 const DEFAULT_MODELS = Object.freeze({
@@ -14,7 +14,7 @@ const DEFAULT_MODELS = Object.freeze({
   openai: 'gpt-5.6',
   gemini: 'gemini-3.1-pro',
   deepseek: 'deepseek-v4-flash',
-  minimax: 'MiniMax-M3',
+  minimax: 'minimaxai/minimax-m3',
   glm: 'z-ai/glm-5.2',
   kimi: 'moonshotai/kimi-k2.6',
   nvidia: 'z-ai/glm-5.2',
@@ -188,11 +188,16 @@ export function getBaseUrl(provider = getActiveProvider()) {
     ''
   if (explicit) return explicit
 
-  // NVIDIA-only providers (glm/kimi/nvidia) default to NVIDIA NIM's universal
-  // endpoint so their model list and requests work with just the shared key —
-  // no manual base URL needed. DeepSeek is excluded: it defaults to its own
-  // official endpoint unless the user points it elsewhere.
-  if (normalized === 'glm' || normalized === 'kimi' || normalized === 'nvidia') {
+  // NVIDIA-hosted providers (glm/kimi/minimax/nvidia) default to NVIDIA NIM's
+  // universal endpoint so their model list and requests work with just the
+  // shared key — no manual base URL needed. DeepSeek is excluded: it defaults
+  // to its own official endpoint unless the user points it elsewhere.
+  if (
+    normalized === 'glm' ||
+    normalized === 'kimi' ||
+    normalized === 'minimax' ||
+    normalized === 'nvidia'
+  ) {
     return NVIDIA_BASE_URL
   }
   return ''
