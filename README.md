@@ -117,9 +117,9 @@ export GEMINI_API_KEY="..."
 | 🟢 OpenAI | GPT-5.6 (Sol · Terra · Luna), GPT-5.5 | 🔑 API key / OAuth |
 | 🔵 Google Gemini | Gemini 3.1 Pro, Gemini 3.6 Flash, 3.5 Flash-Lite | 🔑 API key |
 | 🐳 DeepSeek | DeepSeek V4, V4-Flash | 🔑 API key |
-| 🟠 MiniMax | MiniMax-M3 | 🔑 API key |
-| 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🟩 NVIDIA key |
-| 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🟩 NVIDIA key |
+| 🟠 MiniMax | MiniMax-M3 | 🌐 custom base URL + 🔑 API key |
+| 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🌐 custom base URL + 🔑 API key |
+| 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🌐 custom base URL + 🔑 API key |
 | ⭐ Your favorite model | **Any** OpenAI-compatible endpoint (option 8) | 🌐 custom base URL + 🔑 API key |
 
 > 🌐 **Your favorite model** — bring any OpenAI-compatible provider: set a **custom base URL** and its **API key** in `/model`, and Axolot auto-discovers the available models from `/models`. Not tied to any single provider.
