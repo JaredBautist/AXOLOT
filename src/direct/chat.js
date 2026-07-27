@@ -42,7 +42,7 @@ const program = new Command()
 program
   .name('axolot')
   .description('Fast direct multi-provider AI CLI')
-  .version('0.3.12')
+  .version('0.3.13')
   .argument('[prompt...]', 'prompt text')
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')
