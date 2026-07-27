@@ -56,6 +56,14 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - El endpoint devuelve UN catálogo compartido para todo provider → causa raíz del bug del picker (DeepSeek mostraba los 118 modelos)
 - Fix picker: filtro por keywords por provider (`PROVIDER_MODEL_KEYWORDS`) + orden newest-first (`localeCompare numeric`); glm/kimi/deepseek muestran solo lo suyo
 - **Item 8 "Your favorite model"** = provider `nvidia` genérico (top-level, después de Kimi): passthrough de CUALQUIER modelo del catálogo, sin filtro de keyword (`keywords=null`)
+
+### Kimi fallback chain (nativeProvider.ts) — 27 Jul 2026
+- **Causa raíz del 404 de Kimi:** `moonshotai/kimi-k2.6` aparece en el catálogo `/v1/models` de NVIDIA NIM pero al invocarlo devuelve `404 {"detail":"Function '<uuid>': Not found for account '<acct>'"}` para la cuenta (modelo listado pero NO aprovisionado). GLM (`z-ai/glm-5.2`) responde 200 con la MISMA nvapi- key → el problema es específico del modelo, no de key/endpoint. `k2.5` no existe; `k2-instruct` da 410 Gone
+- **Kimi tiene su propio streamer con fallback** `streamKimi` (no usa `streamNvidiaHosted` directo). `buildKimiAttempts()` arma la cadena: (1) NVIDIA NIM `kimi-k2.6` → (2) API oficial Moonshot `kimi-latest` en `https://api.moonshot.ai/v1` SOLO si hay `moonshotKey()` real (`MOONSHOT_API_KEY`/`apiKeys.moonshot`, ignora nvapi-) → (3) GLM `z-ai/glm-5.2` sobre la misma nvapi- key como último recurso, con nota visible
+- Sólo cae al siguiente attempt si el error es **pre-stream 404/410** (`errorStatus()` + `started===false`); una vez que fluyen tokens nunca cambia. La nota (`prefixNote`) se emite dentro de `streamOpenAICompatible` DESPUÉS de que `create()` conecta, así nunca aparece en un attempt que a su vez falla
+- `streamNvidiaHosted` ahora es wrapper delgado sobre el core `streamOpenAICompatible(provider, model, apiKey, baseURL, ..., prefixNote?)` (reutilizable con key/base explícitos)
+- **Fix del mensaje de error** (catch de `queryNativeProvider`): el hint accionable ya NO está atado a `customBase` (antes se suprimía justo para los providers NVIDIA-hosted con base default); se muestra en cualquier 404/410 sobre `effectiveBase`. `providerErrorDetail()` extrae el `detail` real de NVIDIA en vez del opaco "404 status code (no body)" del SDK OpenAI
+- Path directo (`src/direct/`) NO tiene esta cadena — sigue usando `moonshotai/kimi-k2.6` y daría 404 (pendiente si se quiere replicar)
 - Defaults más recientes: GLM `z-ai/glm-5.2`, Kimi `moonshotai/kimi-k2.6` (verificados en build.nvidia.com)
 - Model refs con `/` (org prefix): `setDirectModel` parte en el PRIMER `/`, preserva resto con `modelParts.join('/')`
 - `getBaseUrl`: glm/kimi/minimax/nvidia default a NVIDIA_BASE_URL; DeepSeek NO (usa api.deepseek.com oficial)

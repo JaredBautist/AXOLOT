@@ -260,7 +260,15 @@ export async function* queryNativeProvider({
           else yield event.event
         }
       }
-    } else if (route.provider === 'glm' || route.provider === 'kimi' || route.provider === 'nvidia') {
+    } else if (route.provider === 'kimi') {
+      // Kimi has its own fallback chain (NVIDIA NIM → Moonshot → GLM) because
+      // moonshotai/kimi-k2.6 is catalog-listed on NVIDIA NIM but 404s
+      // ("Function not found for account") for many accounts.
+      for await (const event of streamKimi(route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
+      }
+    } else if (route.provider === 'glm' || route.provider === 'nvidia') {
       for await (const event of streamNvidiaHosted(route.provider, route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
@@ -301,11 +309,22 @@ export async function* queryNativeProvider({
   } catch (error) {
     if (signal.aborted) return
     const classified = classifyNativeError(error instanceof Error ? error : new Error(String(error)))
-    const errorText = formatError(error)
-    const customBase = storeBaseUrl(route.provider)
+    // Prefer the provider's own error detail (e.g. NVIDIA's "Function ... Not
+    // found for account") over the OpenAI SDK's opaque "404 status code (no
+    // body)".
+    const detail = providerErrorDetail(error)
+    const errorText = detail || formatError(error)
+    const status = errorStatus(error)
+    // NVIDIA-hosted providers use the default NVIDIA endpoint when no custom
+    // base URL is stored — show the actionable hint there too, not only for
+    // user-configured bases (the old check suppressed it exactly where the
+    // gated-model 404s happen).
+    const effectiveBase =
+      storeBaseUrl(route.provider) ||
+      (NVIDIA_HOSTED.includes(route.provider) ? NVIDIA_BASE_URL : '')
     const notFoundHint =
-      customBase && errorText.includes('404')
-        ? ` — "${route.model}" may not exist on ${customBase}. Run /model to pick one from that endpoint's list.`
+      status === 404 || status === 410
+        ? ` — "${route.model}" is not available on ${effectiveBase || 'the configured endpoint'}. Run /model to pick an available model.`
         : ''
     yield createAssistantAPIErrorMessage({
       content: `Provider error (${route.provider}/${classified}): ${errorText}${notFoundHint}`,
@@ -366,6 +385,54 @@ function storeBaseUrl(provider: string): string {
     (directStore.get(`baseUrls.${provider}`) as string) ||
     ''
   return String(value).trim().replace(/\/+$/, '')
+}
+
+// A real Moonshot key for the official Kimi API (Kimi's NVIDIA fallback). The
+// shared nvapi- key does NOT work against Moonshot, so ignore it — only a
+// dedicated MOONSHOT_API_KEY / stored apiKeys.moonshot counts.
+function moonshotKey(): string {
+  const raw =
+    process.env.MOONSHOT_API_KEY ||
+    (directStore.get('apiKeys.moonshot') as string) ||
+    ''
+  const key = String(raw).replace(/[^\x21-\x7E]/g, '')
+  return key.startsWith('nvapi-') ? '' : key
+}
+
+// Best-effort HTTP status from an OpenAI-SDK / fetch error: prefer the numeric
+// `.status`, else scrape a 4xx/5xx out of the message.
+function errorStatus(e: unknown): number | undefined {
+  const anyE = e as { status?: unknown; message?: unknown }
+  if (typeof anyE?.status === 'number') return anyE.status
+  const match = String(anyE?.message ?? '').match(/\b([45]\d\d)\b/)
+  return match ? Number(match[1]) : undefined
+}
+
+// Pull the provider's own human-readable error detail (e.g. NVIDIA's
+// "Function ... Not found for account ...") out of an error whose parsed body
+// the OpenAI SDK otherwise hides behind "404 status code (no body)".
+function providerErrorDetail(e: unknown): string {
+  const anyE = e as { error?: unknown; body?: unknown; message?: unknown }
+  for (const body of [anyE?.error, anyE?.body]) {
+    if (body && typeof body === 'object') {
+      const b = body as Record<string, unknown>
+      const nested = b.error as Record<string, unknown> | undefined
+      const d = b.detail || b.message || b.title || nested?.message
+      if (d) return String(d)
+    }
+  }
+  const msg = String(anyE?.message ?? '')
+  const jsonStart = msg.indexOf('{')
+  if (jsonStart !== -1) {
+    try {
+      const parsed = JSON.parse(msg.slice(jsonStart)) as Record<string, unknown>
+      const d = parsed.detail || parsed.message || parsed.title
+      if (d) return String(d)
+    } catch {
+      // not JSON — fall through
+    }
+  }
+  return ''
 }
 
 async function ensureOpenAIToken(): Promise<string> {
@@ -786,8 +853,7 @@ async function* streamDeepSeek(
 }
 
 // Generic OpenAI-compatible streamer for NVIDIA-hosted providers (GLM, Kimi).
-// Same shape as streamDeepSeek minus the DeepSeek-only `thinking` extra_body;
-// base URL defaults to NVIDIA's universal endpoint but honors a custom override.
+// Base URL defaults to NVIDIA's universal endpoint but honors a custom override.
 async function* streamNvidiaHosted(
   provider: 'glm' | 'kimi' | 'nvidia' | 'minimax',
   model: string,
@@ -798,9 +864,27 @@ async function* streamNvidiaHosted(
   emitChunk: NativeEmitChunk,
 ): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
   const apiKey = storeApiKey(provider)
-  if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`)
-
   const baseURL = storeBaseUrl(provider) || NVIDIA_BASE_URL
+  yield* streamOpenAICompatible(provider, model, apiKey, baseURL, messages, systemPrompt, signal, tools, emitChunk)
+}
+
+// Core OpenAI-compatible streamer with explicit key/base so Kimi's fallback
+// chain can point the same transport at NVIDIA, Moonshot, or GLM. `prefixNote`
+// (if any) is emitted as text only AFTER the request connects, so a fallback
+// notice never appears on an attempt that itself 404s.
+async function* streamOpenAICompatible(
+  provider: 'glm' | 'kimi' | 'nvidia' | 'minimax',
+  model: string,
+  apiKey: string,
+  baseURL: string,
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  emitChunk: NativeEmitChunk,
+  prefixNote?: string,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  if (!apiKey) throw new Error(`${provider.toUpperCase()}_API_KEY is not configured`)
 
   const { default: OpenAI } = await import('openai')
   const client = new OpenAI({ apiKey, baseURL })
@@ -819,6 +903,10 @@ async function* streamNvidiaHosted(
       { signal },
     ),
   )
+
+  if (prefixNote) {
+    for (const event of emitChunk('text', prefixNote)) yield { type: 'event', event }
+  }
 
   for await (const part of stream) {
     const rawDelta = part.choices?.[0]?.delta as Record<string, unknown> | undefined
@@ -849,6 +937,116 @@ async function* streamNvidiaHosted(
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
+}
+
+type KimiAttempt = {
+  provider: 'kimi' | 'glm'
+  model: string
+  apiKey: string
+  baseURL: string
+  note?: string
+}
+
+// Build Kimi's ordered attempt chain. Primary is whatever base is configured
+// (NVIDIA NIM by default). Because moonshotai/kimi-k2.6 is catalog-listed on
+// NVIDIA NIM but 404s ("Function not found for account") for many accounts, we
+// add fallbacks: Moonshot's official API when a real Moonshot key is present,
+// then GLM on the same NVIDIA key as a last resort so the user still gets a
+// reply instead of a cryptic 404.
+// Map an incoming model id to one valid on Moonshot's own API. NVIDIA-namespaced
+// ids (moonshotai/kimi-k2.6) aren't valid there; fall back to Moonshot's rolling
+// "latest" alias. A bare id with no org prefix is assumed already Moonshot-valid.
+function moonshotModel(model: string): string {
+  if (process.env.MOONSHOT_MODEL) return process.env.MOONSHOT_MODEL
+  return model.includes('/') ? 'kimi-latest' : model
+}
+
+function moonshotBase(): string {
+  return (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1').trim().replace(/\/+$/, '')
+}
+
+function buildKimiAttempts(model: string): KimiAttempt[] {
+  const nvKey = storeApiKey('kimi')
+  const rawBase = storeBaseUrl('kimi')
+  const base = rawBase || NVIDIA_BASE_URL
+  const msKey = moonshotKey()
+
+  // If the user already points Kimi's base at Moonshot's own API, that IS the
+  // only route — no NVIDIA/GLM fallback.
+  if (/moonshot\.(ai|cn)/i.test(base)) {
+    return [{ provider: 'kimi', model: moonshotModel(model), apiKey: msKey || nvKey, baseURL: base }]
+  }
+
+  // Any OTHER custom base (OpenRouter, a gateway, self-host) is trusted as-is:
+  // a single route with the configured key/model and no NVIDIA/GLM fallback,
+  // since those defaults would be wrong for a non-NVIDIA endpoint. This is how
+  // you get real Kimi when NVIDIA hasn't provisioned it for your account —
+  // e.g. base https://openrouter.ai/api/v1 + model moonshotai/kimi-k2.6:free.
+  if (rawBase) {
+    return [{ provider: 'kimi', model, apiKey: nvKey, baseURL: base }]
+  }
+
+  const attempts: KimiAttempt[] = []
+
+  // Real Moonshot key → use the official API as PRIMARY (real Kimi) and skip
+  // NVIDIA's guaranteed 404 entirely. No note: this IS Kimi.
+  if (msKey) {
+    attempts.push({ provider: 'kimi', model: moonshotModel(model), apiKey: msKey, baseURL: moonshotBase() })
+  }
+
+  // NVIDIA NIM Kimi — works only if the account has kimi-k2.6 provisioned.
+  attempts.push({
+    provider: 'kimi',
+    model,
+    apiKey: nvKey,
+    baseURL: base,
+    note: msKey ? '_(Moonshot API unavailable — falling back to Kimi on NVIDIA.)_\n\n' : undefined,
+  })
+
+  // GLM on the shared NVIDIA key — last resort so the user always gets a reply.
+  attempts.push({
+    provider: 'glm',
+    model: 'z-ai/glm-5.2',
+    apiKey: nvKey,
+    baseURL: base,
+    note: '_(Kimi is not available — answering with GLM instead. Run /model to switch.)_\n\n',
+  })
+  return attempts
+}
+
+// Kimi with automatic fallback. Each attempt only falls through on a pre-stream
+// 404/410 (model gated/retired); once tokens start flowing we never switch.
+async function* streamKimi(
+  model: string,
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  emitChunk: NativeEmitChunk,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  const attempts = buildKimiAttempts(model)
+  let lastErr: unknown
+  for (let i = 0; i < attempts.length; i++) {
+    const a = attempts[i]
+    let started = false
+    try {
+      for await (const ev of streamOpenAICompatible(
+        a.provider, a.model, a.apiKey, a.baseURL, messages, systemPrompt, signal, tools, emitChunk, a.note,
+      )) {
+        started = true
+        yield ev
+      }
+      return
+    } catch (e) {
+      if (signal.aborted) throw e
+      lastErr = e
+      const status = errorStatus(e)
+      const canFallback = !started && (status === 404 || status === 410)
+      if (!canFallback || i === attempts.length - 1) throw e
+      // else: fall through to the next attempt
+    }
+  }
+  if (lastErr) throw lastErr
 }
 
 async function* streamMiniMax(
