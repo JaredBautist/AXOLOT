@@ -27,6 +27,7 @@ import {
   setActiveProvider,
   setDefaultModel,
 } from './config.js'
+import { resolveBunExecutable } from './bun-runtime.js'
 
 const PROXY_CLEANUP_KEYS = [
   'ANTHROPIC_API_URL',
@@ -42,7 +43,7 @@ const program = new Command()
 program
   .name('axolot')
   .description('Fast direct multi-provider AI CLI')
-  .version('0.3.13')
+  .version('0.3.14')
   .argument('[prompt...]', 'prompt text')
   .option('-p, --provider <provider>', 'override provider')
   .option('-m, --model <model>', 'override model')
@@ -401,7 +402,7 @@ function buildEngineSpawnConfig({ yolo = false, engineArgs = [] } = {}) {
   ]
 
   return {
-    bunCommand: resolveBundledBun(repoRoot),
+    bunCommand: resolveBunExecutable(repoRoot),
     args,
     env,
     launchDir,
@@ -455,18 +456,6 @@ async function runHeadlessAgent(prompt, { yolo = false } = {}) {
   }
 
   process.exitCode = result.status ?? 0
-}
-
-function resolveBundledBun(repoRoot) {
-  const localBin = resolve(
-    repoRoot,
-    'node_modules',
-    '.bin',
-    process.platform === 'win32' ? 'bun.cmd' : 'bun',
-  )
-
-  if (existsSync(localBin)) return localBin
-  return 'bun'
 }
 
 function getRuntimeConfigDir() {
