@@ -30,7 +30,7 @@ axolot
 
 ## ✨ Features
 
-**🔌 Multi-Provider** — Anthropic, OpenAI, Gemini, DeepSeek, MiniMax, GLM, Kimi, and NVIDIA NIM (bring your own model). Switch anytime with `/model`.
+**🔌 Multi-Provider** — Anthropic, OpenAI, Gemini, DeepSeek, MiniMax, GLM, Kimi, Hydra, and NVIDIA NIM (bring your own model). Switch anytime with `/model`.
 
 ```bash
 axolot use anthropic claude-sonnet-5
@@ -38,7 +38,7 @@ axolot use openai gpt-5.6
 axolot use gemini gemini-3.1-pro
 ```
 
-**⭐ Your favorite model** — Pick option 8 in `/model` and bring **any** OpenAI-compatible provider: set a **custom base URL** and your **API key**, and Axolot auto-discovers the available models from `/models`. Not locked to any single vendor — point it wherever you like (OpenRouter, a gateway, self-hosted, ...).
+**⭐ Your favorite model** — Pick option 9 in `/model` and bring **any** OpenAI-compatible provider: set a **custom base URL** and your **API key**, and Axolot auto-discovers the available models from `/models`. Not locked to any single vendor — point it wherever you like (OpenRouter, a gateway, self-hosted, ...).
 
 **🛠️ 30+ Built-in Skills** — Invoke with `/<skill-name>`. The model auto-selects them based on your task.
 
@@ -114,6 +114,7 @@ Or use environment variables:
 export ANTHROPIC_API_KEY="sk-..."
 export OPENAI_API_KEY="sk-..."
 export GEMINI_API_KEY="..."
+export HYDRA_API_KEY="..."
 ```
 
 ## 🔌 Provider Support
@@ -126,9 +127,23 @@ export GEMINI_API_KEY="..."
 | 🟠 MiniMax *(via NVIDIA NIM)* | minimaxai/minimax-m3 | 🌐 custom base URL + 🔑 API key |
 | 🧊 GLM *(via NVIDIA NIM)* | z-ai/glm-5.2 | 🌐 custom base URL + 🔑 API key |
 | 🌙 Kimi *(via NVIDIA NIM)* | moonshotai/kimi-k2.6 | 🌐 custom base URL + 🔑 API key |
-| ⭐ Your favorite model | **Any** OpenAI-compatible endpoint (option 8) | 🌐 custom base URL + 🔑 API key |
+| 🐉 Hydra | axolot | 🔑 `HYDRA_API_KEY` |
+| ⭐ Your favorite model | **Any** OpenAI-compatible endpoint (option 9) | 🌐 custom base URL + 🔑 API key |
 
 > 🌐 **Your favorite model** — bring any OpenAI-compatible provider: set a **custom base URL** and its **API key** in `/model`, and Axolot auto-discovers the available models from `/models`. Not tied to any single provider.
+
+### Hydra
+
+```bash
+axolot auth hydra
+axolot use hydra axolot
+axolot
+```
+
+Hydra uses the fixed `axolot` model at
+`https://ftnezbtydnviwduydqsk.supabase.co/functions/v1/hydra-chat`.
+Set `HYDRA_MODE` to override the default request mode (`balanced`). Hydra is
+provider 8 in `/model`; “Your favorite model” is provider 9.
 
 ## 🧑‍💻 Development
 ```bash

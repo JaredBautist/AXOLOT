@@ -2,7 +2,7 @@ import type { TaskType } from '../orchestration/modelRegistry.js'
 import { classifyTaskType } from '../orchestration/taskRouter.js'
 import type { Message } from '../../types/message.js'
 
-export type NativePromptProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'nvidia'
+export type NativePromptProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'hydra' | 'nvidia'
 
 export function inferNativePromptTask(messages: Message[]): TaskType {
   const lastUserText = getLastUserText(messages)
@@ -106,6 +106,10 @@ export function buildNativeProviderPromptModule(provider: NativePromptProvider):
     kimi: [
       'Leverage the long context without noisy recaps; preserve tool-call/tool-result pairing.',
       'Prefer decisive, structured answers over verbose exploration.',
+    ],
+    hydra: [
+      'This is the Axolot model served by Hydra; follow the supplied project instructions and tool schemas exactly.',
+      'Keep tool arguments valid JSON and user-facing responses concise and evidence-backed.',
     ],
     nvidia: [
       'This model is served over an OpenAI-compatible endpoint; follow tool schemas strictly and emit valid JSON tool arguments.',

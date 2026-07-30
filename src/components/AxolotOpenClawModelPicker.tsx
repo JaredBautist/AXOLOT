@@ -80,6 +80,10 @@ const AUTH_URLS: Record<string, { login: string; label: string }> = {
     login: 'https://build.nvidia.com/',
     label: 'build.nvidia.com (NVIDIA key)',
   },
+  hydra: {
+    login: '',
+    label: 'Hydra platform',
+  },
   nvidia: {
     login: 'https://build.nvidia.com/',
     label: 'build.nvidia.com (NVIDIA key)',
@@ -134,6 +138,13 @@ const providerOptions = [
     label: 'Kimi (Moonshot)',
     description: 'Kimi via NVIDIA NIM, e.g. moonshotai/kimi-k2.6. Uses your NVIDIA key.',
     placeholder: 'moonshotai/kimi-k2.6',
+    hasOAuth: false,
+  },
+  {
+    id: 'hydra',
+    label: 'Hydra',
+    description: 'Axolot model served by Hydra. Uses HYDRA_API_KEY.',
+    placeholder: 'axolot',
     hasOAuth: false,
   },
   {
@@ -304,6 +315,7 @@ export function AxolotOpenClawModelPicker({
   React.useEffect(() => {
     if (page.name !== 'select-model' || !current) return
     const providerId = current.id
+    if (providerId === 'hydra') return
     const baseUrl = getBaseUrl(providerId)
     if (!baseUrl) return
     if (
@@ -352,7 +364,7 @@ export function AxolotOpenClawModelPicker({
     const isAuthed = isProviderAuthed(current.id)
     if (!isAuthed && !current.hasOAuth) {
       const authInfo = AUTH_URLS[current.id]
-      openBrowser(authInfo.login).catch(() => {})
+      if (authInfo.login) openBrowser(authInfo.login).catch(() => {})
     }
   }, [page.name, current?.id])
 
@@ -398,6 +410,7 @@ export function AxolotOpenClawModelPicker({
     else if (provider.id === 'minimax') process.env.MINIMAX_API_KEY = credentials
     else if (provider.id === 'glm') process.env.GLM_API_KEY = credentials
     else if (provider.id === 'kimi') process.env.KIMI_API_KEY = credentials
+    else if (provider.id === 'hydra') process.env.HYDRA_API_KEY = credentials
     else if (provider.id === 'nvidia') process.env.NVIDIA_API_KEY = credentials
     else if (provider.id === 'claude') {
       if (type === 'oauth') {
@@ -717,12 +730,20 @@ export function AxolotOpenClawModelPicker({
 
           {!current.hasOAuth && !isAuthed && (
             <Box marginBottom={1} flexDirection="column" paddingLeft={1}>
-              <Text dimColor>
-                After logging in, create an API key and paste it below:
-              </Text>
-              <Text color={paneColorFor(current)} wrap="truncate-end">
-                {authInfo.login.replace('/login', '/api-keys')}
-              </Text>
+              {current.id === 'hydra' ? (
+                <Text dimColor>
+                  Paste the HYDRA_API_KEY issued for your Axolot model.
+                </Text>
+              ) : (
+                <>
+                  <Text dimColor>
+                    After logging in, create an API key and paste it below:
+                  </Text>
+                  <Text color={paneColorFor(current)} wrap="truncate-end">
+                    {authInfo.login.replace('/login', '/api-keys')}
+                  </Text>
+                </>
+              )}
             </Box>
           )}
 
@@ -771,7 +792,7 @@ export function AxolotOpenClawModelPicker({
                   }
                 }}
                 focus={true}
-                placeholder="sk-..."
+                placeholder={current.id === 'hydra' ? 'HYDRA_API_KEY' : 'sk-...'}
                 columns={terminalSize.columns}
                 cursorOffset={cursorOffset}
                 onChangeCursorOffset={setCursorOffset}
@@ -818,7 +839,7 @@ export function AxolotOpenClawModelPicker({
             }}
             onExit={() => setPage({ name: 'signin', provider: current })}
             focus={true}
-            placeholder="sk-..."
+            placeholder={current.id === 'hydra' ? 'HYDRA_API_KEY' : 'sk-...'}
             columns={terminalSize.columns}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
@@ -969,6 +990,7 @@ export function AxolotOpenClawModelPicker({
 
   // ===== PAGE: SELECT MODEL =====
   if (page.name === 'select-model' && current) {
+    const isHydra = current.id === 'hydra'
     const customBaseUrl = getBaseUrl(current.id)
     const fullCatalog =
       customBaseUrl &&
@@ -1074,18 +1096,22 @@ export function AxolotOpenClawModelPicker({
                 } as OptionWithDescription<string>),
           ]
         : []),
-      {
-        value: PROVIDER_MODEL,
-        label: 'Enter model name manually',
-        description: `Type a custom model name for ${current.label}.`,
-      },
-      {
-        value: PROVIDER_BASE_URL,
-        label: 'Set custom base URL',
-        description: getBaseUrl(current.id)
-          ? `Current: ${getBaseUrl(current.id)} — change or clear the endpoint.`
-          : 'Use a compatible endpoint (NVIDIA NIM, OpenRouter, gateway...).',
-      },
+      ...(!isHydra
+        ? [
+            {
+              value: PROVIDER_MODEL,
+              label: 'Enter model name manually',
+              description: `Type a custom model name for ${current.label}.`,
+            } as OptionWithDescription<string>,
+            {
+              value: PROVIDER_BASE_URL,
+              label: 'Set custom base URL',
+              description: getBaseUrl(current.id)
+                ? `Current: ${getBaseUrl(current.id)} — change or clear the endpoint.`
+                : 'Use a compatible endpoint (NVIDIA NIM, OpenRouter, gateway...).',
+            } as OptionWithDescription<string>,
+          ]
+        : []),
       {
         value: PROVIDER_BACK,
         label: 'Change provider',
@@ -1103,7 +1129,7 @@ export function AxolotOpenClawModelPicker({
             <Text dimColor>
               Pick a model to start working with {current.label}.
             </Text>
-            {customBaseUrl && !endpointModels && (
+            {customBaseUrl && !endpointModels && !isHydra && (
               <Text dimColor>Loading models from {endpointHost}...</Text>
             )}
             {endpointModels && (

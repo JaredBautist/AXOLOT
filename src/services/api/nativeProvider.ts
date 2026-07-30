@@ -39,11 +39,13 @@ const nativeToolSchemaCache = new Map<
   Promise<{ openai: OpenAIToolSchema[]; gemini: GeminiToolSchema[] }>
 >()
 
-type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'nvidia'
+type NativeProvider = 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'hydra' | 'nvidia'
 
 // GLM (Zhipu) and Kimi (Moonshot) default to NVIDIA NIM's universal, OpenAI-
 // compatible endpoint — one nvapi- key unlocks many models.
 const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+const HYDRA_CHAT_URL =
+  'https://ftnezbtydnviwduydqsk.supabase.co/functions/v1/hydra-chat'
 
 type NativeRoute = {
   provider: NativeProvider
@@ -95,6 +97,10 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
     return { provider: 'kimi', model: raw.slice('kimi/'.length) }
   }
 
+  if (lower.startsWith('hydra/')) {
+    return { provider: 'hydra', model: raw.slice('hydra/'.length) }
+  }
+
   // "nvidia/<org>/<model>" — the universal NVIDIA NIM passthrough ("your
   // favorite model"): any model in the catalog, routed to NVIDIA as-is.
   if (lower.startsWith('nvidia/')) {
@@ -105,7 +111,7 @@ export function getNativeProviderRoute(model: string): NativeRoute | null {
   if (
     envProvider === 'openai' || envProvider === 'gemini' || envProvider === 'deepseek' ||
     envProvider === 'minimax' || envProvider === 'glm' || envProvider === 'kimi' ||
-    envProvider === 'nvidia'
+    envProvider === 'hydra' || envProvider === 'nvidia'
   ) {
     return { provider: envProvider, model: raw }
   }
@@ -268,6 +274,11 @@ export async function* queryNativeProvider({
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
         else yield event.event
       }
+    } else if (route.provider === 'hydra') {
+      for await (const event of streamHydra(nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
+        if (event.type === 'tool_calls') toolCalls = event.toolCalls
+        else yield event.event
+      }
     } else if (route.provider === 'glm' || route.provider === 'nvidia') {
       for await (const event of streamNvidiaHosted(route.provider, route.model, nativeMessages, systemPrompt, signal, nativeTools.openai, emitChunk)) {
         if (event.type === 'tool_calls') toolCalls = event.toolCalls
@@ -321,7 +332,11 @@ export async function* queryNativeProvider({
     // gated-model 404s happen).
     const effectiveBase =
       storeBaseUrl(route.provider) ||
-      (NVIDIA_HOSTED.includes(route.provider) ? NVIDIA_BASE_URL : '')
+      (NVIDIA_HOSTED.includes(route.provider)
+        ? NVIDIA_BASE_URL
+        : route.provider === 'hydra'
+          ? HYDRA_CHAT_URL
+          : '')
     const notFoundHint =
       status === 404 || status === 410
         ? ` — "${route.model}" is not available on ${effectiveBase || 'the configured endpoint'}. Run /model to pick an available model.`
@@ -355,6 +370,7 @@ function storeApiKey(provider: string): string {
     provider === 'minimax' ? 'MINIMAX_API_KEY' :
     provider === 'glm' ? 'GLM_API_KEY' :
     provider === 'kimi' ? 'KIMI_API_KEY' :
+    provider === 'hydra' ? 'HYDRA_API_KEY' :
     provider === 'nvidia' ? 'NVIDIA_API_KEY' :
     'GEMINI_API_KEY'
   const raw =
@@ -378,6 +394,7 @@ function storeBaseUrl(provider: string): string {
     provider === 'minimax' ? 'MINIMAX_BASE_URL' :
     provider === 'glm' ? 'GLM_BASE_URL' :
     provider === 'kimi' ? 'KIMI_BASE_URL' :
+    provider === 'hydra' ? 'HYDRA_CHAT_URL' :
     provider === 'nvidia' ? 'NVIDIA_BASE_URL' :
     'GEMINI_BASE_URL'
   const value =
@@ -937,6 +954,93 @@ async function* streamOpenAICompatible(
       input: normalizeNativeToolInput(call.name, parseToolArguments(call.arguments)),
     }))
   if (toolCalls.length > 0) yield { type: 'tool_calls', toolCalls }
+}
+
+async function* streamHydra(
+  messages: Message[],
+  systemPrompt: SystemPrompt,
+  signal: AbortSignal,
+  tools: OpenAIToolSchema[],
+  emitChunk: NativeEmitChunk,
+): AsyncGenerator<{ type: 'event'; event: StreamEvent } | { type: 'tool_calls'; toolCalls: NativeToolCall[] }> {
+  const apiKey = storeApiKey('hydra')
+  if (!apiKey) throw new Error('HYDRA_API_KEY is not configured')
+
+  const chatUrl = storeBaseUrl('hydra') || HYDRA_CHAT_URL
+  const hydraMessages = [
+    {
+      role: 'system',
+      content: nativeSystemPrompt(systemPrompt, 'hydra', messages, 'axolot'),
+    },
+    ...messagesToOpenAIChat(messages),
+  ]
+  const baseBody: Record<string, unknown> = {
+    messages: hydraMessages,
+    mode: process.env.HYDRA_MODE || 'balanced',
+  }
+
+  const request = async (includeTools: boolean): Promise<Response> =>
+    fetch(chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        ...baseBody,
+        ...(includeTools && tools.length > 0
+          ? { tools, tool_choice: 'auto' }
+          : {}),
+      }),
+      signal,
+    })
+
+  let response = await request(tools.length > 0)
+  // The documented Hydra example only guarantees `messages` and `mode`.
+  // Try OpenAI-style tool schemas first so the full Axolot loop works when
+  // supported, then fall back to the documented minimal contract.
+  if (
+    !response.ok &&
+    tools.length > 0 &&
+    (response.status === 400 || response.status === 422)
+  ) {
+    await response.text()
+    response = await request(false)
+  }
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(`Hydra error (${response.status}): ${detail}`)
+  }
+
+  const data = await response.json()
+  const message = data?.choices?.[0]?.message
+  const content = message?.content
+  if (typeof content === 'string' && content) {
+    for (const event of emitChunk('text', content)) {
+      yield { type: 'event', event }
+    }
+  }
+
+  const toolCalls = (Array.isArray(message?.tool_calls)
+    ? message.tool_calls
+    : []
+  )
+    .filter((call: any) => call?.function?.name)
+    .map((call: any) => ({
+      id: String(call.id || randomUUID()),
+      name: String(call.function.name),
+      input: normalizeNativeToolInput(
+        String(call.function.name),
+        parseToolArguments(String(call.function.arguments || '')),
+      ),
+    }))
+
+  if (toolCalls.length > 0) {
+    yield { type: 'tool_calls', toolCalls }
+  } else if (typeof content !== 'string' || !content) {
+    throw new Error('Hydra returned no choices[0].message.content or tool_calls')
+  }
 }
 
 type KimiAttempt = {
@@ -1689,7 +1793,7 @@ async function buildNativeToolSchemasUncached(
 
 function nativeSystemPrompt(
   systemPrompt: SystemPrompt,
-  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'nvidia',
+  provider: 'openai' | 'gemini' | 'deepseek' | 'minimax' | 'glm' | 'kimi' | 'hydra' | 'nvidia',
   messages: Message[] = [],
   model = '',
 ): string {
@@ -1699,6 +1803,7 @@ function nativeSystemPrompt(
     provider === 'minimax' ? 'MiniMax' :
     provider === 'glm' ? 'GLM' :
     provider === 'kimi' ? 'Kimi' :
+    provider === 'hydra' ? 'Hydra' :
     provider === 'nvidia' ? 'NVIDIA' :
     'Gemini'
   const poweredBy = model ? `${providerName} (model: ${model})` : providerName

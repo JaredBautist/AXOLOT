@@ -150,6 +150,7 @@ export function getOpenClawProviderLabel(model: string | null): string {
     if (provider === 'minimax') return 'MiniMax'
     if (provider === 'glm') return 'GLM'
     if (provider === 'kimi') return 'Kimi'
+    if (provider === 'hydra') return 'Hydra'
     if (provider === 'nvidia') return 'NVIDIA'
     if (provider === 'claude' || provider === 'anthropic') return 'Anthropic API'
     return 'Native provider'
@@ -183,6 +184,7 @@ export function listOpenClawModels(): OpenClawModel[] {
       directModel('minimax', 'MiniMax-M3', 'MiniMax M3'),
       directModel('glm', 'z-ai/glm-5.2', 'GLM 5.2 (NVIDIA)'),
       directModel('kimi', 'moonshotai/kimi-k2.6', 'Kimi K2.6 (NVIDIA)'),
+      directModel('hydra', 'axolot', 'Axolot (Hydra)'),
     ]
 
     const openaiCredType = directStore.get('credentialType.openai') as string
@@ -325,6 +327,7 @@ function defaultDirectModel(provider: string): string {
   if (provider === 'minimax') return 'MiniMax-M3'
   if (provider === 'glm') return 'z-ai/glm-5.2'
   if (provider === 'kimi') return 'moonshotai/kimi-k2.6'
+  if (provider === 'hydra') return 'axolot'
   if (provider === 'nvidia') return 'z-ai/glm-5.2'
   return 'claude-3-5-sonnet-latest'
 }
@@ -348,6 +351,7 @@ function getDirectApiKey(provider: string): string {
   if (normalized === 'deepseek') return process.env.DEEPSEEK_API_KEY || sharedNvidiaDirectKey()
   if (normalized === 'glm') return process.env.GLM_API_KEY || sharedNvidiaDirectKey()
   if (normalized === 'kimi') return process.env.KIMI_API_KEY || sharedNvidiaDirectKey()
+  if (normalized === 'hydra') return process.env.HYDRA_API_KEY || ''
   if (normalized === 'nvidia') return process.env.NVIDIA_API_KEY || sharedNvidiaDirectKey()
   if (normalized === 'minimax') return process.env.MINIMAX_API_KEY || ''
   return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || ''

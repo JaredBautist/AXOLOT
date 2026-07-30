@@ -1,4 +1,11 @@
-import { applyProxyEnv, getBaseUrl, getProxyConfig, normalizeProvider, NVIDIA_BASE_URL } from './config.js'
+import {
+  applyProxyEnv,
+  getBaseUrl,
+  getProxyConfig,
+  HYDRA_CHAT_URL,
+  normalizeProvider,
+  NVIDIA_BASE_URL,
+} from './config.js'
 
 // SDKs se cargan bajo demanda: importar los tres al inicio penaliza el
 // arranque de cada `axolot chat` aunque solo se use un provider.
@@ -273,6 +280,46 @@ export class OpenAICompatibleProvider {
   }
 }
 
+export class HydraProvider {
+  constructor({ apiKey }) {
+    this.apiKey = apiKey
+    this.chatUrl = getBaseUrl('hydra') || HYDRA_CHAT_URL
+  }
+
+  async streamResponse(prompt, _model, onChunk, options = {}) {
+    const messages = []
+    if (options.system) {
+      messages.push({ role: 'system', content: options.system })
+    }
+    messages.push({ role: 'user', content: prompt })
+
+    const response = await fetch(this.chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        messages,
+        mode: process.env.HYDRA_MODE || 'balanced',
+      }),
+      signal: options.signal,
+    })
+
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(`Hydra error (${response.status}): ${detail}`)
+    }
+
+    const data = await response.json()
+    const content = data?.choices?.[0]?.message?.content
+    if (typeof content !== 'string' || !content) {
+      throw new Error('Hydra returned no choices[0].message.content')
+    }
+    onChunk(content)
+  }
+}
+
 export class GeminiProvider {
   constructor({ apiKey }) {
     this.apiKey = apiKey
@@ -342,6 +389,8 @@ export function createProvider(provider, { apiKey }) {
       return new OpenAICompatibleProvider({ apiKey, provider: 'glm', defaultBase: NVIDIA_BASE_URL })
     case 'kimi':
       return new OpenAICompatibleProvider({ apiKey, provider: 'kimi', defaultBase: NVIDIA_BASE_URL })
+    case 'hydra':
+      return new HydraProvider({ apiKey })
     case 'nvidia':
       return new OpenAICompatibleProvider({ apiKey, provider: 'nvidia', defaultBase: NVIDIA_BASE_URL })
     default:

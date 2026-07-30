@@ -49,6 +49,25 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
 - MiniMax keepalive: false en todas las peticiones fetch
 - Gemini transient errors: RESOURCE_EXHAUSTED, UNAVAILABLE, DEADLINE_EXCEEDED, INTERNAL
 
+### Hydra — 29 Jul 2026
+- Provider `hydra`, modelo fijo `axolot`.
+- Endpoint POST completo:
+  `https://ftnezbtydnviwduydqsk.supabase.co/functions/v1/hydra-chat`.
+- Auth `Bearer HYDRA_API_KEY`; body base `{messages, mode}` con
+  `HYDRA_MODE=balanced` por defecto; respuesta
+  `choices[0].message.content`.
+- Se activa por CLI con `axolot auth hydra` y
+  `axolot use hydra axolot`.
+- El motor intenta schemas OpenAI-style de tools y entiende
+  `message.tool_calls`; si Hydra rechaza los campos con 400/422, reintenta el
+  contrato mínimo.
+- **Autorización específica posterior:** Hydra sí puede aparecer en el picker
+  existente como provider 8 debajo de Kimi; “Your favorite model” pasa al 9.
+  Esto autoriza únicamente esa entrada funcional y el modelo fijo
+  `hydra/axolot`; no autoriza cambios de layout, arte, branding, colores ni
+  diseño de la TUI.
+- El usuario probó la integración real y confirmó que funciona.
+
 ### NVIDIA NIM (GLM / Kimi / NVIDIA "your favorite model") — 24 Jul 2026
 - Endpoint universal `https://integrate.api.nvidia.com/v1`: UNA nvapi- key desbloquea 100+ modelos
 - `NVIDIA_HOSTED = ['glm','kimi','deepseek','minimax','nvidia']` comparten la key vía `sharedNvidiaKey()` (prefiere `NVIDIA_API_KEY`, si no cualquier sibling)

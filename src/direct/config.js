@@ -1,13 +1,15 @@
 import Conf from 'conf'
 
-export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'nvidia'])
-const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'nvidia'])
+export const PROVIDERS = Object.freeze(['claude', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'hydra', 'nvidia'])
+const DISPLAY_PROVIDERS = Object.freeze(['anthropic', 'openai', 'gemini', 'deepseek', 'minimax', 'glm', 'kimi', 'hydra', 'nvidia'])
 
 // Providers hosted behind NVIDIA NIM's universal OpenAI-compatible endpoint.
 // A single NVIDIA_API_KEY unlocks all of them, so it's a shared fallback key.
 // 'nvidia' is the generic passthrough ("your favorite model") — any catalog model.
 const NVIDIA_HOSTED = Object.freeze(['glm', 'kimi', 'deepseek', 'minimax', 'nvidia'])
 export const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+export const HYDRA_CHAT_URL =
+  'https://ftnezbtydnviwduydqsk.supabase.co/functions/v1/hydra-chat'
 
 const DEFAULT_MODELS = Object.freeze({
   claude: 'claude-sonnet-5',
@@ -17,6 +19,7 @@ const DEFAULT_MODELS = Object.freeze({
   minimax: 'minimaxai/minimax-m3',
   glm: 'z-ai/glm-5.2',
   kimi: 'moonshotai/kimi-k2.6',
+  hydra: 'axolot',
   nvidia: 'z-ai/glm-5.2',
 })
 
@@ -45,6 +48,7 @@ export function normalizeProvider(provider) {
   if (value === 'kimi' || value === 'moonshot' || value === 'moonshotai') {
     return 'kimi'
   }
+  if (value === 'hydra') return 'hydra'
   if (value === 'nvidia' || value === 'nim') {
     return 'nvidia'
   }
@@ -141,6 +145,9 @@ export function setDefaultModel(provider, model) {
   if (!value) {
     throw new Error(`Modelo vacio para ${normalized}`)
   }
+  if (normalized === 'hydra' && value.toLowerCase() !== 'axolot') {
+    throw new Error('Hydra usa el modelo fijo: axolot')
+  }
 
   store.set(`models.${normalized}`, value)
 }
@@ -148,6 +155,7 @@ export function setDefaultModel(provider, model) {
 export function getDefaultModel(provider = getActiveProvider()) {
   const normalized = normalizeProvider(provider)
 
+  if (normalized === 'hydra') return DEFAULT_MODELS.hydra
   return store.get(`models.${normalized}`) || DEFAULT_MODELS[normalized]
 }
 
@@ -200,6 +208,7 @@ export function getBaseUrl(provider = getActiveProvider()) {
   ) {
     return NVIDIA_BASE_URL
   }
+  if (normalized === 'hydra') return HYDRA_CHAT_URL
   return ''
 }
 
@@ -306,6 +315,8 @@ function envKeyForProvider(provider) {
       return 'GLM_API_KEY'
     case 'kimi':
       return 'KIMI_API_KEY'
+    case 'hydra':
+      return 'HYDRA_API_KEY'
     case 'nvidia':
       return 'NVIDIA_API_KEY'
     default:
@@ -329,6 +340,8 @@ function baseUrlEnvKey(provider) {
       return 'GLM_BASE_URL'
     case 'kimi':
       return 'KIMI_BASE_URL'
+    case 'hydra':
+      return 'HYDRA_CHAT_URL'
     case 'nvidia':
       return 'NVIDIA_BASE_URL'
     default:

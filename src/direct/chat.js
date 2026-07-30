@@ -87,13 +87,13 @@ program
   .command('auth')
   .alias('login')
   .description('Configure a provider API key interactively')
-  .argument('[provider]', 'anthropic | openai | gemini | deepseek | minimax')
+  .argument('[provider]', 'anthropic | openai | gemini | deepseek | minimax | glm | kimi | hydra | nvidia')
   .action(async providerArg => {
     const rl = readline.createInterface({ input, output })
     try {
       const provider =
         providerArg ||
-        (await rl.question('Provider (anthropic/openai/gemini/deepseek/minimax): ')).trim()
+        (await rl.question('Provider (anthropic/openai/gemini/deepseek/minimax/glm/kimi/hydra/nvidia): ')).trim()
       const apiKey = (await rl.question('API key: ')).trim()
 
       saveApiKey(provider, apiKey)
@@ -108,7 +108,7 @@ program
 program
   .command('key')
   .description('Save an API key locally')
-  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax')
+  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax | glm | kimi | hydra | nvidia')
   .argument('<apiKey>', 'provider API key')
   .action((provider, apiKey) => {
     saveApiKey(provider, apiKey)
@@ -119,7 +119,7 @@ program
 program
   .command('use')
   .description('Set active provider and optional default model')
-  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax')
+  .argument('<provider>', 'anthropic | openai | gemini | deepseek | minimax | glm | kimi | hydra | nvidia')
   .argument('[model]', 'default model for this provider')
   .action((provider, model) => {
     setActiveProvider(provider)
@@ -342,6 +342,9 @@ function buildEngineSpawnConfig({ yolo = false, engineArgs = [] } = {}) {
     }
     if (providerName === 'minimax') {
       env.MINIMAX_API_KEY = apiKey
+    }
+    if (providerName === 'hydra') {
+      env.HYDRA_API_KEY = apiKey
     }
   }
 
