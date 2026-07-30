@@ -67,6 +67,8 @@ stickers, thinkback year-in-review) — renombrarlos engañaría.
   `hydra/axolot`; no autoriza cambios de layout, arte, branding, colores ni
   diseño de la TUI.
 - El usuario probó la integración real y confirmó que funciona.
+- La integración se publicó en npm como `axolot-ai@0.3.16`; `latest` y una
+  instalación limpia desde el registry quedaron verificados.
 
 ### NVIDIA NIM (GLM / Kimi / NVIDIA "your favorite model") — 24 Jul 2026
 - Endpoint universal `https://integrate.api.nvidia.com/v1`: UNA nvapi- key desbloquea 100+ modelos
